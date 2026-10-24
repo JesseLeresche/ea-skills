@@ -41,6 +41,17 @@ parser; `python -m easkills <command> --help` is the same information, per comma
 flag that only decorated the report header would be exactly the decorative conformance the
 0.11.0 review removed elsewhere.
 
+Under `validate --strict`, when the only findings that fail the run are warnings, the
+closing line says so instead of showing a pass mark, and the exit code stays 1:
+
+```
+0 error(s), 3 warning(s) treated as errors under --strict -- ✗ FAIL
+```
+
+Without `--strict` the same model ends `0 error(s), 3 warning(s) -- ✓ PASS` (exit 0), and
+a run that has real errors, or no warnings, prints the line it always did. The other
+`--strict` gates keep their existing closing line.
+
 ## Validation gates
 
 | Command | Checks | Rules |
@@ -55,7 +66,7 @@ Full catalogue with severities and rationale: [RULES.md](RULES.md).
 
 | Command | Does |
 |---|---|
-| `import --file <export>.xml [--out] [--ids names\|identifiers] [--json]` | ArchiMate Open Exchange XML → staging YAML proposals, written the way this repository authors models: elements per ArchiMate layer, relationships in `relations.yaml`, views in `views.yaml`. That split is what makes a slice promotable on its own — `--out` collapses it to one file, which cannot be. (Brownfield adoption.) Everything arrives `assumed` (claims, not evidence), owner/review metadata is lifted from exported properties, geometry is discarded, every rename/skip/mapping is in the report, and an existing file is never overwritten. The import does not judge the model — matrix-illegal content is left for `validate` to report. |
+| `import --file <export>.xml [--out] [--ids names\|identifiers] [--json]` | ArchiMate Open Exchange XML → staging YAML proposals, written the way this repository authors models: elements per ArchiMate layer, relationships in `relations.yaml`, views in `views.yaml`. That split is what makes a slice promotable on its own — `--out` collapses it to one file, which cannot be. (Brownfield adoption.) Everything arrives `assumed` (claims, not evidence), owner/review metadata is lifted from exported properties, geometry is discarded, every rename/skip/mapping is in the report, and an existing file is never overwritten. The import does not judge the model — matrix-illegal content is left for `validate` to report. A native Archi file (`.archimate`, XML or the zipped variant) is **refused** with exit 1, not imported: in Archi use *File > Export > Model to Open Exchange File…* and import that. |
 | `compile [--zone] [--out] [--skip-validation]` | DSL → ArchiMate Open Exchange XML (`build/model.xml`), XSD-validated offline, byte-stable. Refuses a model with errors. |
 | `promote [--file <staging-file>]... [--dry-run]` | **The only write path into `approved/`.** Validates the *post-move* result by approved-zone standards — a staging file replaces the approved file of the same name, so the gate sees exactly what the move produces; on a clean gate moves the files, naming any approved concepts the replacement removes. Partial promotion supported. The git commit is the approval record. |
 | `render [--zone] [--out]` | Views → deterministic SVG (`docs/views/`), no external toolchain. |

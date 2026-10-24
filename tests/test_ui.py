@@ -51,6 +51,17 @@ def test_verdict_line_keeps_the_contract_words(plain):
     assert "FAIL" in ui.verdict(False, 2, 1)
 
 
+def test_strict_verdict_says_warnings_were_promoted(plain):
+    line = ui.verdict(True, 0, 3, strict=True)
+    assert line == f"0 error(s), 3 warning(s) treated as errors under --strict -- {ui.cross()} FAIL"
+    assert "PASS" not in line
+
+
+def test_strict_verdict_is_unchanged_when_nothing_was_promoted(plain):
+    assert ui.verdict(True, 0, 0, strict=True) == ui.verdict(True, 0, 0)
+    assert ui.verdict(False, 2, 3, strict=True) == ui.verdict(False, 2, 3)
+
+
 def test_symbols_fall_back_when_console_cannot_encode(monkeypatch):
     class AsciiStream:
         encoding = "ascii"
