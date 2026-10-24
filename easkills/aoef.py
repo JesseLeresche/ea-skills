@@ -176,6 +176,13 @@ def build_tree(model: dsl.Model) -> etree._ElementTree:
             node.set("source", concept_id(relationship.source))
             node.set("target", concept_id(relationship.target))
             node.set(f"{{{XSI}}}type", relationship.type)
+            # Written only when the model says something; otherwise the XSD default applies.
+            if relationship.access_type:
+                node.set("accessType", relationship.access_type)
+            if relationship.is_directed is not None:
+                node.set("isDirected", "true" if relationship.is_directed else "false")
+            if relationship.modifier:
+                node.set("modifier", relationship.modifier)
             _append_text(node, "name", relationship.name)
             _append_text(node, "documentation", relationship.documentation)
             _append_properties(node, _governance_properties(relationship), definitions)

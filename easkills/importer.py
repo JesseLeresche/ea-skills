@@ -36,7 +36,7 @@ from typing import Any
 import yaml
 from lxml import etree
 
-from . import aoef, oracle
+from . import aoef, genschema, oracle
 
 # Property keys `aoef.py` writes for governance metadata; lifted back into DSL fields
 # on import (and removed from the property map, so nothing exists twice).
@@ -174,6 +174,41 @@ def _lift_governance(item: dict[str, Any], properties: dict[str, str], source_na
         item["properties"] = dict(sorted(properties.items()))
 
 
+_XSD_BOOLEANS = {"true": True, "1": True, "false": False, "0": False}
+
+
+def _lift_relationship_attributes(
+    node: etree._Element, item: dict[str, Any], identifier: str, report: ImportReport
+) -> None:
+    """Carry the Exchange attributes the DSL models (accessType, isDirected, modifier).
+
+    A value the DSL cannot hold, or an attribute on a relationship type it does not belong
+    to, is dropped *with a note*: this importer never loses data without saying so.
+    """
+    rel_type = item["type"]
+    for attribute, owner in genschema.RELATIONSHIP_ATTRIBUTE_OWNERS.items():
+        raw = node.get(attribute)
+        if raw is None:
+            continue
+        label = f"relationship '{identifier}': {attribute}=\"{raw}\""
+        if rel_type != owner:
+            report.notes.append(f"{label} dropped, it is only valid on {owner} relationships")
+        elif attribute == "accessType":
+            if raw.strip() in genschema.ACCESS_TYPES:
+                item[attribute] = raw.strip()
+            else:
+                report.notes.append(f"{label} dropped, not one of {', '.join(genschema.ACCESS_TYPES)}")
+        elif attribute == "isDirected":
+            if raw.strip() in _XSD_BOOLEANS:
+                item[attribute] = _XSD_BOOLEANS[raw.strip()]
+            else:
+                report.notes.append(f"{label} dropped, not an xs:boolean")
+        elif raw.strip():
+            item[attribute] = raw
+        else:
+            report.notes.append(f"{label} dropped, empty")
+
+
 def read_exchange(xml: bytes, ids: str, report: ImportReport) -> dict[str, Any]:
     """Exchange XML -> the DSL document, best-effort with every omission reported."""
     try:
@@ -250,6 +285,7 @@ def read_exchange(xml: bytes, ids: str, report: ImportReport) -> dict[str, Any]:
         documentation = _text_of(node, "documentation")
         if documentation:
             item["documentation"] = documentation
+        _lift_relationship_attributes(node, item, identifier, report)
         _lift_governance(item, _properties_of(node, definitions), source_name)
         relationships.append(item)
 

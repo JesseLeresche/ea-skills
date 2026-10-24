@@ -82,6 +82,7 @@ actually die: content nobody owns, that nobody revisits. They are mandatory in t
 | `REL001` | error | The relationship type is not permitted between these two element types by the ArchiMate 3.2 matrix. The message lists what *is* permitted, and says so explicitly when the relationship would be legal in the opposite direction -- swapped endpoints are the most common authoring mistake. |
 | `REL002` | error | Composition or aggregation closes a cycle. Structural containment must form a hierarchy. |
 | `REL003` | warning | Another relationship already has the same type, source and target. |
+| `REL004` | error | An optional Open Exchange attribute is on a relationship type it does not belong to: `accessType` is only valid on `Access`, `isDirected` on `Association`, `modifier` on `Influence`. A value outside the attribute's own vocabulary (`accessType` not one of `Access`/`Read`/`Write`/`ReadWrite`, `isDirected` not a boolean) is `SCHEMA001`. Left unset, an attribute is not written to the exchange file and the XSD default applies. |
 
 ## Layer 2 -- motivation and applicability (AD-09)
 
