@@ -28,10 +28,12 @@ where every other finding lives.
 from __future__ import annotations
 
 import hashlib
+import io
 import re
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 import yaml
 from lxml import etree
@@ -47,6 +49,10 @@ LIFTED_LISTS = {"appliesTo": "appliesTo", "standards": "standards"}
 # DSL) knows the one concept `Junction`. Mapped, not dropped: junctions sit on
 # relationship chains, and removing one silently severs the chain.
 TYPE_ALIASES = {"AndJunction": "Junction", "OrJunction": "Junction"}
+
+# The namespace of Archi's own save format; its root is <archimate:model>, which the
+# exchange reader would otherwise take for an (empty) Open Exchange <model>.
+ARCHI_NATIVE_NS = "http://www.archimatetool.com/archimate"
 
 SLUG_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789._-")
 
@@ -361,12 +367,45 @@ def _partition(document: dict[str, Any]) -> list[tuple[str, str, dict[str, Any]]
     return parts
 
 
+def _root_tag(stream: IO[bytes]) -> str | None:
+    """The qualified name of a document's root element, read without parsing the rest."""
+    try:
+        for _event, element in etree.iterparse(stream, events=("start",), resolve_entities=False):
+            return element.tag if isinstance(element.tag, str) else None
+    except etree.XMLSyntaxError:
+        pass
+    return None
+
+
+def _is_native_archi(data: bytes) -> bool:
+    """Archi's own ``.archimate`` format: XML in Archi's namespace, or a zip holding it.
+
+    Both look like a ``<model>`` to the exchange reader, which is why this is decided on
+    the root element's namespace and not on the file name or the local name.
+    """
+    if zipfile.is_zipfile(io.BytesIO(data)):
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as bundle, bundle.open("model.xml") as member:
+                tag = _root_tag(member)
+        except (KeyError, zipfile.BadZipFile):
+            return False
+    else:
+        tag = _root_tag(io.BytesIO(data))
+    return tag is not None and etree.QName(tag).namespace == ARCHI_NATIVE_NS
+
+
 def import_exchange(
     root: Path, source: Path, out: Path | None = None, ids: str = "names"
 ) -> ImportReport:
     if not source.is_file():
         raise ImportRefusal(f"{source} does not exist")
     xml = source.read_bytes()
+    if _is_native_archi(xml):
+        raise ImportRefusal(
+            f"{source.name} is a native Archi model, not Open Exchange XML -- import reads "
+            "Open Exchange XML only. In Archi, use File > Export > Model to Open Exchange "
+            "File..., then import the exported file."
+        )
     staging = root / "model" / "staging"
     report = ImportReport(
         source=source.name,

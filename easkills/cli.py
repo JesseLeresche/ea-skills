@@ -379,7 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     report = validate_mod.validate(args.root.resolve(), zone=args.zone)
-    print(report.render())
+    print(report.render(strict=args.strict))
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(json.dumps(report.as_dict(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

@@ -90,7 +90,7 @@ class Report:
             "findings": [f.as_dict() for f in self.findings],
         }
 
-    def render(self) -> str:
+    def render(self, strict: bool = False) -> str:
         lines = [
             ui.bold(f"EA model validation -- zone '{self.zone}' at {self.root}"),
             ui.dim(
@@ -106,7 +106,7 @@ class Report:
         else:
             for finding in self.findings:
                 lines.append(finding.render())
-        lines += ["", ui.verdict(self.ok, len(self.errors), len(self.warnings))]
+        lines += ["", ui.verdict(self.ok, len(self.errors), len(self.warnings), strict=strict)]
         return "\n".join(lines)
 
 

@@ -118,10 +118,17 @@ def status(label: str) -> str:
     return label
 
 
-def verdict(ok: bool, errors: int, warnings: int) -> str:
-    """The standard closing line of every gate."""
+def verdict(ok: bool, errors: int, warnings: int, strict: bool = False) -> str:
+    """The standard closing line of every gate.
+
+    Under ``--strict`` a gate that has only warnings fails, and the line says so: a
+    ``PASS`` mark beside an exit code of 1 reads as a pass in a CI log.
+    """
     error_part = red(f"{errors} error(s)") if errors else dim("0 error(s)")
     warning_part = yellow(f"{warnings} warning(s)") if warnings else dim("0 warning(s)")
+    if ok and strict and warnings:
+        promoted = yellow(f"{warnings} warning(s) treated as errors under --strict")
+        return f"{error_part}, {promoted} {dim('--')} {red(bold(f'{cross()} FAIL'))}"
     if ok:
         return f"{error_part}, {warning_part} {dim('--')} {green(bold(f'{check()} PASS'))}"
     return f"{error_part}, {warning_part} {dim('--')} {red(bold(f'{cross()} FAIL'))}"

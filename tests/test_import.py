@@ -9,6 +9,7 @@ diagram nodes. The importer's job is to survive all of it *loudly*; judging the 
 stays the gate's job."""
 
 import shutil
+import zipfile
 from datetime import date
 from pathlib import Path
 
@@ -253,6 +254,56 @@ def test_an_empty_model_is_refused(tmp_path):
         encoding="utf-8",
     )
     with pytest.raises(importer.ImportRefusal, match="no importable content"):
+        importer.import_exchange(tmp_path, source)
+
+
+NATIVE_ARCHI = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    '<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+    'xmlns:archimate="http://www.archimatetool.com/archimate" name="Demo" id="id-1" version="5.0.0">\n'
+    '  <folder name="Business" id="id-2" type="business">\n'
+    '    <element xsi:type="archimate:BusinessActor" name="Patient" id="id-3"/>\n'
+    "  </folder>\n"
+    "</archimate:model>\n"
+)
+
+
+def _native_archi_files(tmp_path) -> list[Path]:
+    """Archi saves a model as plain XML, or as a zip whose ``model.xml`` is that XML."""
+    plain = tmp_path / "demo.archimate"
+    plain.write_text(NATIVE_ARCHI, encoding="utf-8")
+    archive = tmp_path / "demo-archive.archimate"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("model.xml", NATIVE_ARCHI)
+    return [plain, archive]
+
+
+@pytest.mark.parametrize("variant", [0, 1], ids=["xml", "zip"])
+def test_a_native_archi_model_is_refused_with_the_way_to_export_it(tmp_path, variant):
+    source = _native_archi_files(tmp_path)[variant]
+    with pytest.raises(importer.ImportRefusal) as caught:
+        importer.import_exchange(tmp_path, source)
+    message = str(caught.value)
+    assert "native Archi" in message
+    assert "Open Exchange" in message
+    assert "File > Export > Model to Open Exchange File" in message
+    assert "no importable content" not in message
+    assert not (tmp_path / "model").exists()
+
+
+def test_cli_import_of_a_native_archi_model_exits_one(tmp_path, capsys):
+    source = _native_archi_files(tmp_path)[0]
+    assert cli.main(["import", "--root", str(tmp_path), "--file", str(source)]) == 1
+    out = capsys.readouterr().out
+    assert "ERROR" in out
+    assert "Model to Open Exchange File" in out
+
+
+def test_a_zip_that_is_not_an_archi_model_is_not_called_one(tmp_path):
+    source = tmp_path / "other.zip"
+    with zipfile.ZipFile(source, "w") as bundle:
+        bundle.writestr("readme.txt", "hello")
+    with pytest.raises(importer.ImportRefusal, match="not parseable"):
         importer.import_exchange(tmp_path, source)
 
 
