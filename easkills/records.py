@@ -654,7 +654,7 @@ def _fail_problems(args: argparse.Namespace, problems: list[Problem], file: str 
 def _lookup(rtype: RecordType, loaded: Loaded, key: str) -> tuple[Record | None, str]:
     if key in loaded.records:
         return loaded.records[key], ""
-    if key.isdigit():
+    if key.isascii() and key.isdigit():
         matches = sorted((r for r in loaded.records.values() if r.number == int(key)), key=lambda r: r.id)
         if len(matches) == 1:
             return matches[0], ""

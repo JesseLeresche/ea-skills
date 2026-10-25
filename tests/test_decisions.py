@@ -291,7 +291,7 @@ def test_show_ambiguous_number_lists_the_candidates(tmp_path, capsys):
 
 def test_show_not_found(tmp_path, capsys):
     seed(tmp_path, "0001-a")
-    for key in ("0002-nope", "2", "nope"):
+    for key in ("0002-nope", "2", "nope", "\u00b2", "\u0663"):  # non-ASCII digits are not record numbers
         code, out, err = decisions_main(capsys, ["show", key], tmp_path)
         assert code == 1 and out == "" and err.strip(), key
         code, out, err = decisions_main(capsys, ["show", key, "--json"], tmp_path)
