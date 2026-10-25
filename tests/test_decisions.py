@@ -222,7 +222,7 @@ def test_list_filters(tmp_path, capsys):
     assert set(_list_ids(capsys, tmp_path, "--element", "app-b", "--element", "app-zzz")) == {"0002-two"}
     assert _list_ids(capsys, tmp_path, "--text", "needle") == ["legacy-a"]  # matched inside, never printed
     assert _list_ids(capsys, tmp_path, "--text", "secretcontext") == ["0010-ten"]
-    assert _list_ids(capsys, tmp_path, "--text", "legacy z") == []
+    assert _list_ids(capsys, tmp_path, "--text", "legacy z") == ["legacy-z"]  # the title, which has a space the id does not
     assert set(_list_ids(capsys, tmp_path, "--text", "legacy")) == {"legacy-z", "legacy-a"}  # id and title
     assert set(_list_ids(capsys, tmp_path, "--since", "2026-05-01")) == {"0002-two", "legacy-a"}
 

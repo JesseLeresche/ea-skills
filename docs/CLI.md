@@ -30,7 +30,7 @@ parser; `python -m easkills <command> --help` is the same information, per comma
 | `--zone approved\|staging` | Which zone to read; governance metadata is mandatory in `approved` | `validate`, `compile`, `render`, `impact`, `align`, `readiness` |
 | `--strict` | Warnings fail too (on `conformance`: any failed clause fails; on `align`: gaps fail; on `readiness`: any open checkpoint fails) | `validate`, `validate-facts`, `validate-gov`, `conformance`, `check`, `align`, `readiness`, `dora-register`, `ai-act-register` |
 | `--as-of YYYY-MM-DD` | Evaluate date-dependent checks against a fixed date, for reproducibility | `validate-gov`, `staleness`, `kpi`, `debt`, `conformance`, `correspondences`, `roadmap`, `context`, `check`, `impact`, `dora-register`, `ai-act-register`, `maturity`, `propose` (**required** there) |
-| `--json <file>` | Write the machine-readable report alongside the rendered one. On `chunk` it takes **no argument** and prints JSON to stdout instead | `validate`, `validate-facts`, `validate-gov`, `staleness`, `kpi`, `debt`, `conformance`, `correspondences`, `delta`, `roadmap`, `coverage`, `score`, `chunk`, `check`, `import`, `impact`, `intake-csv`, `align`, `readiness`, `dora-register`, `ai-act-register`, `maturity`, `propose` |
+| `--json <file>` | Write the machine-readable report alongside the rendered one. On `chunk` and `decisions` it takes **no argument** and prints JSON to stdout instead | `validate`, `validate-facts`, `validate-gov`, `staleness`, `kpi`, `debt`, `conformance`, `correspondences`, `delta`, `roadmap`, `coverage`, `score`, `chunk`, `decisions`, `check`, `import`, `impact`, `intake-csv`, `align`, `readiness`, `dora-register`, `ai-act-register`, `maturity`, `propose` |
 | `--out <path>` | Output file (or directory, for `render`) instead of the default location | `compile`, `render`, `docs`, `context`, `import`, `intake-csv`, `dora-register`, `ai-act-register`, `propose` |
 | `--skip-validation` | Build from a model with validation errors (not recommended) | `compile`, `docs` |
 | `--scope <element-id>` | The element the command is about | `context`, `check`, `impact` |
@@ -318,6 +318,35 @@ control is `ALN004`. See [`ea-regulatory`](../skills/ea-regulatory/SKILL.md).
 | `gen-schema` | Regenerates every JSON Schema under `schema/` — all twelve, from one registry, each freshness-tested against its committed copy (the model schema derives from the oracle, so a stale one would accept what the validator rejects). |
 | `oracle-info` | Oracle version, concept coverage, checksum pin status. |
 | `pin-oracle` | Rewrites the SHA-256 pins — only for deliberate, reviewed oracle upgrades; never to silence `ORACLE001`. |
+
+## Decision register
+
+`decisions` is a command group over `governance-log/decisions/`. Every subcommand takes
+`--root <path>` and `--json` (no argument: one JSON document on stdout, errors included as
+`{"ok": false, ...}`).
+
+| Command | Does |
+|---|---|
+| `decisions list [--status S]... [--element ID]... [--text Q] [--since YYYY-MM-DD] [--json]` | One line per record (id, status, date, title, ` -> successor`), never the bodies. Repeated flags are alternatives; different flags combine with AND. `--text` is a case-insensitive substring over the id, the title and the context/decision/rationale/consequences text, which is matched but not printed. Files that cannot be read (bad YAML, no `id`, duplicate id) are listed at the end as `skipped:` — run `validate-gov` for the detail. An empty result exits 0. |
+| `decisions show <id-or-number> [--json]` | The whole record and its file. A number (`8` or `0008`) resolves when exactly one record has that sequence number; an exact id always wins. `supersedes` and `supersededBy` are resolved from both directions, so a legacy one-way link still shows. |
+| `decisions new --title T [--status proposed\|accepted\|rejected] [--date YYYY-MM-DD] [--element ID]... [--context\|--decision\|--rationale\|--consequences TEXT] [--from-file F.yaml \| --from-stdin] [--json]` | Creates `governance-log/decisions/NNNN-slug.yaml` with the next free number (gaps are never reused; legacy and date-prefixed ids are ignored). Fields can come from a YAML mapping (`--from-file`/`--from-stdin`); flags override it. `id`, `supersedes` and `supersededBy` in the input are refused. The record is validated **before** anything is written, so a refusal leaves no file and no directory; an existing file is never overwritten. The date defaults to today. |
+| `decisions set-status <id-or-number> <status> [--json]` | `proposed` → `accepted`/`rejected`, `accepted` → `deprecated`; the rest are terminal. The same status is a no-op (exit 0). `superseded` is only reached through `supersede`. Only the status line is edited; comments and wording stay. |
+| `decisions supersede <old> <new> [--json]` | Both records must be `accepted`. Old becomes `superseded` with `supersededBy: <new>`; new gains `<old>` in `supersedes`. Re-running it, or repairing a legacy one-way link, is safe. It does **not** move `relatedElements`: carry them over by hand (`CORR001`). |
+
+Exit codes: 0 done (including an empty `list` and an idempotent no-op); 1 refused — not
+found, ambiguous number, validation failed, would overwrite, illegal transition, a
+precondition failed, or a file too unusual to edit safely (flow-style documents, anchors,
+multi-line quoted values); 2 usage error.
+
+The minimum for a decisions-only repository is a directory with `governance-log/decisions/`
+(`new` creates it); `ea.config.yaml` is optional. The one thing that needs a model is
+`relatedElements`/`--element`, which is checked against the approved model — leave it out
+when there is none.
+
+Honest limit: `supersede` edits two files. Both edits are prepared and validated before
+either is written, and if the second write fails the first is restored, but that is
+best-effort and not crash-proof: after a power cut between the writes `validate-gov` reports
+the one-way link (`DEC007`) and re-running `supersede` repairs it.
 
 ## Exit-code contract, in one table
 

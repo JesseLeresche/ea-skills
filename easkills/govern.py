@@ -23,7 +23,7 @@ from typing import Any
 import yaml
 from jsonschema import Draft202012Validator
 
-from . import correspond, dsl, genschema, ui
+from . import correspond, dsl, genschema, records, ui
 from .validate import SEVERITY_ERROR, SEVERITY_INFO, SEVERITY_WARNING, Finding
 
 STANDARDS_DIR = Path("standards")
@@ -62,6 +62,7 @@ class Decision:
     rationale: str = ""
     context: str = ""
     superseded_by: str = ""
+    supersedes: list[str] = field(default_factory=list)
     related_elements: list[str] = field(default_factory=list)
     source_path: Path | None = None
 
@@ -345,6 +346,7 @@ def load(root: Path) -> Governance:
                 rationale=str(data.get("rationale", "") or ""),
                 context=str(data.get("context", "") or ""),
                 superseded_by=str(data.get("supersededBy", "") or ""),
+                supersedes=_str_list(data.get("supersedes")),
                 related_elements=_str_list(data.get("relatedElements")),
                 source_path=doc.path,
             ),
@@ -634,6 +636,65 @@ def _check_decisions(governance: Governance, elements: set[str]) -> list[Finding
                         concept=decision.id,
                     )
                 )
+    findings += _check_decision_links(governance)
+    return findings
+
+
+def _check_decision_links(governance: Governance) -> list[Finding]:
+    """DEC006-DEC008: the two-way supersede link and the sequence numbers."""
+    findings: list[Finding] = []
+    decisions = governance.decisions
+    by_number: dict[int, list[str]] = {}
+    for decision in sorted(decisions.values(), key=lambda d: d.id):
+        rel_file = _rel(governance.root, decision.source_path)
+        for old_id in decision.supersedes:
+            if old_id not in decisions:
+                findings.append(
+                    Finding(
+                        "DEC006",
+                        SEVERITY_ERROR,
+                        f"supersedes '{old_id}' is not a decision record",
+                        file=rel_file,
+                        concept=decision.id,
+                    )
+                )
+            elif decisions[old_id].superseded_by != decision.id:
+                findings.append(
+                    Finding(
+                        "DEC007",
+                        SEVERITY_WARNING,
+                        f"supersedes '{old_id}' but '{old_id}' does not name this record in supersededBy "
+                        "(one-way supersede link)",
+                        file=rel_file,
+                        concept=decision.id,
+                    )
+                )
+        successor = decisions.get(decision.superseded_by)
+        if successor is not None and decision.id not in successor.supersedes:
+            findings.append(
+                Finding(
+                    "DEC007",
+                    SEVERITY_WARNING,
+                    f"supersededBy '{successor.id}' but '{successor.id}' does not list this record in "
+                    "supersedes (one-way supersede link)",
+                    file=rel_file,
+                    concept=decision.id,
+                )
+            )
+        number = records.sequence_number(decision.id)
+        if number is not None:
+            by_number.setdefault(number, []).append(decision.id)
+    for number, shared in sorted(by_number.items()):
+        for other in shared[1:]:
+            findings.append(
+                Finding(
+                    "DEC008",
+                    SEVERITY_WARNING,
+                    f"sequence number {number} is also used by '{shared[0]}'",
+                    file=_rel(governance.root, decisions[other].source_path),
+                    concept=other,
+                )
+            )
     return findings
 
 

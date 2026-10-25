@@ -44,13 +44,37 @@ relatedElements: [service-order-api, app-order-portal]
   makes decisions appear in `ea-context` packs -- an ADR bound to no element governs
   nothing.
 * **Status transitions are records, not edits.** Superseding means: new decision
-  file, old one gets `status: superseded` + `supersededBy:` (checked by
-  `DEC003`/`DEC004`). Never rewrite an accepted decision's content -- amend history
-  through new records.
+  file, old one gets `status: superseded` + `supersededBy:`, new one lists the old in
+  `supersedes:` (checked by `DEC003`/`DEC004`/`DEC006`/`DEC007`). Never rewrite an
+  accepted decision's content -- amend history through new records.
 * **Superseding is not finished until the elements move.** `relatedElements` left on a
   superseded record means the model still realises a decision that no longer stands --
   `CORR001`, and it is the reason the successor record exists at all. Carry the elements
   over to the new record, or drop the ones the new decision no longer covers.
+  `decisions supersede` does not move `relatedElements`; that edit stays yours.
+
+## Writing it: use the commands, not a text editor
+
+Do not hand-write the file or pick its number. `decisions new` allocates the next
+`NNNN-slug` id, validates before it writes, and refuses rather than leaving a broken record:
+
+```bash
+python -m easkills decisions new --root . --title "..." --status proposed \
+  --context "..." --decision "..." --rationale "..." --consequences "..." \
+  --element service-order-api --element app-order-portal
+```
+
+Free-form fields and `options` (pros/cons) go in a YAML mapping passed with `--from-file`
+or `--from-stdin`; flags override the file. `id`, `supersedes` and `supersededBy` are never
+supplied by hand. Then:
+
+* `decisions list` / `decisions show <id-or-number>` to read the register (check for an
+  existing decision before writing a new one);
+* `decisions set-status <id> accepted` once a human has confirmed (`proposed` ->
+  `accepted`/`rejected`, `accepted` -> `deprecated`);
+* `decisions supersede <old> <new>` when a new accepted decision replaces an accepted one:
+  it writes `status: superseded` and `supersededBy` on the old record and `supersedes` on
+  the new one, in one step, then you move or drop `relatedElements` yourself.
 
 ## Judgement calls
 

@@ -225,6 +225,9 @@ nobody acts on is equally fake, so expiry is an error, not a shrug.
 | `DEC003` | error | `supersededBy` names a record that does not exist. |
 | `DEC004` | warning | Status is `superseded` but no successor record is named. |
 | `DEC005` | error | `relatedElements` names an element that is not in the approved model. |
+| `DEC006` | error | `supersedes` names a record that does not exist. |
+| `DEC007` | warning | One-way supersede link: `supersededBy` points at a record that does not list this one in `supersedes`, or `supersedes` names a record that does not point back. `decisions supersede` writes both sides. |
+| `DEC008` | warning | Two records share a sequence number (`NNNN-` id prefix; date-prefixed and legacy ids are not numbered). Reported on every record after the first by id. |
 
 ## Governance log -- compliance assessments
 

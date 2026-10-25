@@ -7,6 +7,29 @@ project's build phases (design log with per-decision rationale:
 
 ## [Unreleased]
 
+### Added — `decisions`: list, show, create, move and supersede decision records
+
+A new command group over `governance-log/decisions/`, built on a record-type-neutral core
+(`easkills/records.py`) with decisions as its first adapter (`easkills/decisions.py`).
+`decisions list` and `show` read the register (filters by status, element, text and date;
+bodies never printed by `list`); `decisions new` allocates the next `NNNN-slug` id, validates
+the record **before** writing and never overwrites; `decisions set-status` moves a record along
+`proposed → accepted/rejected` and `accepted → deprecated`; `decisions supersede` links two
+accepted records on both sides. Every subcommand takes `--root` and a flagless `--json`. Edits to
+existing files touch only the lines concerned and keep comments, wording and line endings;
+a file too unusual to edit safely (flow-style document, anchors, multi-line quoted values) is
+refused, never guessed at. The minimum is a repository with `governance-log/decisions/` and
+no `ea.config.yaml`; only `relatedElements`/`--element` needs an approved model.
+
+Decision records gain an optional `supersedes` list (the schema is regenerated). Three new
+rules: `DEC006` (error) `supersedes` names a record that does not exist; `DEC007` (warning) a
+one-way supersede link; `DEC008` (warning) two records share a sequence number. 150 rules total.
+
+Limits, stated plainly: `supersede` writes two files, so it is best-effort both-or-neither — if the
+second write fails the first is restored, but a crash between the writes can leave a one-way link,
+which `DEC007` reports and re-running `supersede` repairs. `supersede` does not move
+`relatedElements`.
+
 ### Fixed — `import` no longer drops `accessType`, `isDirected` and `modifier`
 
 The DSL had no field for three optional Open Exchange relationship attributes, so

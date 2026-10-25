@@ -30,6 +30,7 @@ python -m easkills compile  --root . --zone approved  # -> build/model.xml
 python -m easkills docs     --root .                  # -> docs/ (AD + SVG views)
 python -m easkills render   --root .                  # views only
 python -m easkills validate-gov --root .              # standards + governance log gate
+python -m easkills decisions list --root .             # decision register (also new, show, set-status, supersede)
 ```
 
 **Operate**
