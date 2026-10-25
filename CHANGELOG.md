@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format follows
 project's build phases (design log with per-decision rationale:
 [BLUEPRINT §8a](docs/BLUEPRINT.md)).
 
+## [Unreleased]
+
+### Fixed — `import` no longer drops `accessType`, `isDirected` and `modifier`
+
+The DSL had no field for three optional Open Exchange relationship attributes, so
+`import` discarded them without a note and `compile` then wrote none: a `Read` access came
+back unspecified, a directed association undirected, an influence without its strength.
+Relationships now take optional `accessType` (`Access`/`Read`/`Write`/`ReadWrite`, the
+XSD enumeration), `isDirected` (boolean, Association only) and `modifier` (Influence only;
+`+`, `++`, `-`, `--`, `0`–`10` or free text, as the XSD allows). The importer carries them
+into the DSL and notes any value it cannot hold; the compiler writes them only when set, so
+existing models compile byte-for-byte as before. New rule `REL004` (error): the attribute is
+on a relationship type it does not belong to. 147 rules total.
+
 ## [0.15.0] — 2026-08-08 — the AI governance release
 
 ### Added — `ai-act-register`: the second register, and the AIR family

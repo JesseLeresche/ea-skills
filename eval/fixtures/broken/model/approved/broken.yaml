@@ -295,6 +295,16 @@ relationships:
       - file: facts/sources/notes.md
         quote: The primary data centre hosts two application servers
 
+  # --- REL004: an Exchange attribute on a relationship type it does not belong to ---
+  - id: rel-wrong-attribute
+    type: Association
+    source: node-a
+    target: data-order
+    accessType: Read
+    provenance:
+      - file: facts/sources/notes.md
+        quote: The primary data centre hosts two application servers
+
   # --- REL003: same type, same endpoints, twice -------------------------------------
   - id: rel-duplicate-one
     type: Association

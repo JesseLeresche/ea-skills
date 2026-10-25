@@ -80,6 +80,7 @@ EXPECTED_ERROR_CODES = [
     "GOV003",  # unparseable review date
     "REL001",  # relationship not permitted by the matrix
     "REL002",  # structural cycle
+    "REL004",  # Exchange attribute on a relationship type it does not belong to
 ]
 
 EXPECTED_WARNING_CODES = [

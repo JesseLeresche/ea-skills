@@ -593,6 +593,31 @@ def check_relationship_matrix(model: dsl.Model) -> list[Finding]:
     return findings
 
 
+def check_relationship_attributes(model: dsl.Model) -> list[Finding]:
+    """The optional Exchange attributes each belong to one relationship type."""
+    findings: list[Finding] = []
+    for relationship in sorted(model.relationships.values(), key=lambda r: r.id):
+        present = {
+            "accessType": bool(relationship.access_type),
+            "isDirected": relationship.is_directed is not None,
+            "modifier": bool(relationship.modifier),
+        }
+        for attribute, owner in genschema.RELATIONSHIP_ATTRIBUTE_OWNERS.items():
+            if present[attribute] and relationship.type != owner:
+                findings.append(
+                    Finding(
+                        "REL004",
+                        SEVERITY_ERROR,
+                        f"{attribute} is only valid on {owner} relationships; this is "
+                        f"{relationship.type} -- remove it, or change the relationship type",
+                        file=_rel(model.root, relationship.source_path),
+                        locator=relationship.locator,
+                        concept=relationship.id,
+                    )
+                )
+    return findings
+
+
 def check_structural_cycles(model: dsl.Model) -> list[Finding]:
     """Composition and aggregation must form a hierarchy, never a cycle."""
     findings: list[Finding] = []
@@ -1151,6 +1176,7 @@ def _run_checks(
     findings += check_provenance(model)
     findings += check_governance_metadata(model, today=today)
     findings += check_relationship_matrix(model)
+    findings += check_relationship_attributes(model)
     findings += check_structural_cycles(model)
     findings += check_duplicate_relationships(model)
     findings += check_motivation(model)

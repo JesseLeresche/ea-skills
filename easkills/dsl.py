@@ -85,6 +85,12 @@ class Element(Concept):
 class Relationship(Concept):
     source: str = ""
     target: str = ""
+    # Open Exchange relationship attributes, each meaningful on one type only (REL004).
+    # Unset means "not specified": the compiler then writes nothing and the XSD default
+    # applies, so a model that never mentions them compiles exactly as before.
+    access_type: str = ""  # Access: Access | Read | Write | ReadWrite
+    is_directed: bool | None = None  # Association
+    modifier: str = ""  # Influence: +, ++, -, --, 0..10 or free text
 
 
 @dataclass
@@ -325,6 +331,9 @@ def build_model(root: Path, zone: str, documents: list[Document], config: dict[s
                 **_common_kwargs(item, doc.path, locator),
                 source=str(item.get("source", "")),
                 target=str(item.get("target", "")),
+                access_type=str(item.get("accessType") or ""),
+                is_directed=item["isDirected"] if isinstance(item.get("isDirected"), bool) else None,
+                modifier="" if item.get("modifier") is None else str(item["modifier"]),
             )
             _register(model, model.relationships, relationship.id, relationship, doc.path)
         for index, item in enumerate(doc.data.get("views") or []):

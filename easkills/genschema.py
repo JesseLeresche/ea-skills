@@ -108,6 +108,16 @@ def split_regulatory_scopes(value: Any) -> frozenset[str]:
 SLUG_PATTERN = "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$"
 DATE_PATTERN = "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
 
+# The Open Exchange `accessType` enumeration (archimate3_Model.xsd, AccessTypeEnum). The
+# oracle's XSD stays the authority: a test compares this tuple to it.
+ACCESS_TYPES = ("Access", "Read", "Write", "ReadWrite")
+# Which relationship type each optional Exchange attribute belongs to (REL004).
+RELATIONSHIP_ATTRIBUTE_OWNERS = {
+    "accessType": "Access",
+    "isDirected": "Association",
+    "modifier": "Influence",
+}
+
 
 def build_schema() -> dict[str, Any]:
     element_types = sorted(oracle.element_types())
@@ -314,6 +324,19 @@ def build_schema() -> dict[str, Any]:
                     "type": {"enum": relationship_types},
                     "source": {"$ref": "#/$defs/slug"},
                     "target": {"$ref": "#/$defs/slug"},
+                    "accessType": {
+                        "enum": list(ACCESS_TYPES),
+                        "description": "Access relationships only (REL004): how the source uses the target. Omit to leave it unspecified.",
+                    },
+                    "isDirected": {
+                        "type": "boolean",
+                        "description": "Association relationships only (REL004): whether the association has a direction, source to target. Omit to leave it unspecified.",
+                    },
+                    "modifier": {
+                        "type": ["string", "integer"],
+                        "minLength": 1,
+                        "description": "Influence relationships only (REL004): strength or sign, e.g. +, ++, -, --, or 0 to 10 (the Exchange format's suggested values; free text is also allowed there).",
+                    },
                 },
             },
             "view": {
