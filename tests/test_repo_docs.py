@@ -38,6 +38,16 @@ def _subparsers() -> dict[str, argparse.ArgumentParser]:
     raise AssertionError("the CLI parser has no subcommands")
 
 
+def _option_actions(parser: argparse.ArgumentParser) -> list[argparse.Action]:
+    """A command's own actions, plus those of any nested subcommands (`decisions new ...`)."""
+    actions = list(parser._actions)
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for nested in action.choices.values():
+                actions += _option_actions(nested)
+    return actions
+
+
 def _implemented_rule_codes(repo_root) -> list[str]:
     rules = _read(repo_root, "docs/RULES.md").split("## Not yet implemented", 1)[0]
     return re.findall(r"^\| `([A-Z]+\d{3})`", rules, re.MULTILINE)
@@ -183,7 +193,7 @@ def test_documented_flag_availability_matches_the_parser(repo_root):
         actual = {
             name
             for name, subparser in parsers.items()
-            if any(flag in action.option_strings for action in subparser._actions)
+            if any(flag in action.option_strings for action in _option_actions(subparser))
         }
         assert documented == actual, (
             f"docs/CLI.md says `{flag}` is on {sorted(documented)}; the parser has it on {sorted(actual)}"

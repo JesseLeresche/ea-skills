@@ -18,6 +18,7 @@ from . import (
     aoef,
     check as check_mod,
     contextpack,
+    decisions,
     docgen,
     dora,
     dsl,
@@ -373,6 +374,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("gen-schema", help="regenerate the JSON Schemas under schema/ from the oracle")
     sub.add_parser("pin-oracle", help="rewrite oracle/SHA256SUMS from the current oracle files")
     sub.add_parser("oracle-info", help="print oracle version and coverage")
+
+    decisions.register(sub)
 
     return parser
 
@@ -925,6 +928,10 @@ def cmd_oracle_info(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_decisions(args: argparse.Namespace) -> int:
+    return args.func(args)
+
+
 HANDLERS = {
     "validate": cmd_validate,
     "compile": cmd_compile,
@@ -958,6 +965,7 @@ HANDLERS = {
     "gen-schema": cmd_gen_schema,
     "pin-oracle": cmd_pin_oracle,
     "oracle-info": cmd_oracle_info,
+    "decisions": cmd_decisions,
 }
 
 

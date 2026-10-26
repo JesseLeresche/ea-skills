@@ -633,6 +633,7 @@ def build_decision_schema() -> dict[str, Any]:
                 },
             },
             "supersededBy": _slug_def(),
+            "supersedes": {"type": "array", "items": _slug_def()},
             "relatedElements": {"type": "array", "items": _slug_def()},
         },
     }

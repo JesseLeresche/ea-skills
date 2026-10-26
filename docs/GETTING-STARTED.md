@@ -185,6 +185,18 @@ six-level verdict, and your service catalog with SLAs:
 python -m easkills validate-gov --root .
 ```
 
+Decisions have their own command group, so nobody hand-numbers files or hand-edits status
+lines. `new` allocates the next `NNNN-slug` id and refuses a record that would fail the
+schema before it writes anything; `supersede` links an old accepted decision to its
+replacement on both sides:
+
+```bash
+python -m easkills decisions new --root . --title "Use PostgreSQL 16" --status accepted \
+  --decision "New relational stores use PostgreSQL 16" --rationale "One engine to run and patch"
+python -m easkills decisions list --root . --status accepted
+python -m easkills decisions supersede --root . 1 2     # old, new (ids or numbers)
+```
+
 ## 5a. Already have a model? Import it
 
 ```bash
