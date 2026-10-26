@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from . import dsl, govern
+from . import dsl, govern, modelquery
 
 
 class ContextError(RuntimeError):
@@ -61,7 +61,7 @@ def build(root: Path, scope: str, today: date | None = None) -> ContextPack:
     threshold, _problem = dsl.config_number(config, "stalenessDays", 365, minimum=1)
 
     if scope not in model.elements:
-        raise ContextError(f"'{scope}' is not an element in the approved model")
+        raise ContextError(f"'{scope}' is not an element in the approved model{modelquery.did_you_mean(scope, model.elements)}")
 
     # A capability scope expands to the elements realizing it.
     focus_ids = [scope]

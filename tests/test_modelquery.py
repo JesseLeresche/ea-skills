@@ -46,10 +46,9 @@ Where docs/plans/001-elements-read-commands.md is silent, these are the readings
   header and no summary line (zero matches print nothing). Notes go to stderr as `note: ...`,
   skipped files as `skipped: <file>: <reason>`. A failing `show` prints `error: ...` to stderr
   and lists suggestions in the message.
-* `suggest_ids(wanted, known) -> list[str]`: tiers in order prefix, substring (both
-  case-sensitive, on `known` ids), then difflib close matches at cutoff 0.6 ordered by ratio
-  descending then id. Within the prefix and substring tiers ids are sorted. No duplicates across
-  tiers, at most 5, `wanted` itself is not special-cased, empty `wanted` gives [], and the
+* `suggest_ids(wanted, known) -> list[str]`: prefix matches, then substring
+  matches (both case-sensitive, on `known` ids), each sorted. Only when both are empty, difflib
+  close matches at cutoff 0.6 ordered by ratio descending then id. No duplicates, at most 5, `wanted` itself is not special-cased, empty `wanted` gives [], and the
   result does not depend on the order or type (list, set) of `known`.
 * The unknown-scope errors of `impact` and `context` keep their text and, only when suggestions
   exist, append ". Did you mean: a, b?" (same helper, same ids as the elements of the model).
@@ -885,8 +884,12 @@ def test_suggest_falls_back_to_difflib():
     assert modelquery.suggest_ids("app-wsm", ["app-wms", "zzz"]) == ["app-wms"]
 
 
-def test_suggest_tier_order_prefix_substring_fuzzy():
-    assert modelquery.suggest_ids("foo", ["fo0", "a-foo", "foo-b"]) == ["foo-b", "a-foo", "fo0"]
+def test_suggest_tier_order_prefix_then_substring():
+    assert modelquery.suggest_ids("foo", ["fo0", "a-foo", "foo-b"]) == ["foo-b", "a-foo"]
+
+
+def test_suggest_fuzzy_only_when_prefix_and_substring_find_nothing():
+    assert modelquery.suggest_ids("foo", ["fo0", "bar"]) == ["fo0"]
 
 
 def test_suggest_nothing_close_gives_empty_list():
@@ -961,7 +964,7 @@ def test_impact_hint_lists_several_suggestions_comma_separated(example_root):
     message = str(caught.value)
     assert message.startswith("'app-' is not an element in the approved model. Did you mean: ")
     listed = message.split("Did you mean: ", 1)[1].rstrip("?").split(", ")
-    assert listed == sorted(listed) and "app-erp-core" in listed and len(listed) == 3
+    assert listed == sorted(listed) and "app-erp-core" in listed and len(listed) == 4
 
 
 def test_impact_without_suggestions_appends_nothing(example_root):
@@ -1170,3 +1173,30 @@ def test_a_325_element_model_lists_quickly(capsys, tmp_path):
     assert doc["notes"] == [] and doc["skipped"] == []
     doc = elements(capsys, tmp_path, "--property", "lifecycle=active", "--limit", "10")
     assert doc["total"] == 162 and doc["count"] == 10
+
+
+# --------------------------------------------------------------------------- review follow-ups
+# Found in review of the first implementation; written red before the fix.
+
+
+def test_show_reports_an_unreadable_decision_file_as_skipped(capsys, repo):
+    broken = repo / "governance-log" / "decisions" / "dec-broken.yaml"
+    broken.write_text("id: dec-broken\ntitle: [unclosed\n", encoding="utf-8")
+    code, doc = jrun(capsys, "elements", "show", "app-erp", root=repo)
+    assert code == 0
+    assert [item["file"] for item in doc["skipped"]] == ["governance-log/decisions/dec-broken.yaml"]
+    assert [d["id"] for d in doc["decisions"]] == ["dec-1"]
+    code, _out, err = run(capsys, "elements", "show", "app-erp", root=repo)
+    assert code == 0 and "skipped: governance-log/decisions/dec-broken.yaml" in err
+
+
+def test_show_has_no_skipped_when_every_decision_reads(capsys, repo):
+    _code, doc = jrun(capsys, "elements", "show", "app-erp", root=repo)
+    assert doc["skipped"] == []
+
+
+def test_show_notes_an_id_that_is_both_an_element_and_a_relationship(capsys, repo):
+    put_model(repo, "clash.yaml", relationships=[rel("app-wms", "Flow", "app-erp", "app-wms")])
+    code, doc = jrun(capsys, "elements", "show", "app-wms", root=repo)
+    assert code == 0 and doc["kind"] == "element"
+    assert any("app-wms" in note and "relationship" in note for note in doc["notes"])

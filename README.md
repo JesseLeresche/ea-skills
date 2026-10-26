@@ -97,6 +97,7 @@ python -m easkills docs           --root eval/example          # -> ISO 42010 de
 python -m easkills context --root eval/example --scope app-erp-core   # agent context pack
 python -m easkills impact  --root eval/example --scope app-erp-core   # blast radius of a change
 python -m easkills roadmap --root eval/example                        # plateaus, gaps, unscheduled intent
+python -m easkills elements list --root eval/example --layer Application   # find elements; also `elements show`, `relations list`
 ```
 
 To start your own architecture repository, copy [`template/`](template/) and follow
@@ -143,7 +144,7 @@ and keeps the stage order honest.
 | Publish | `ea-approve` | `promote` — the only write path into `approved/` |
 | Document | `ea-stakeholders`, `ea-views`, `ea-docs` | `docs`, `render`, ISO loop rules, freshness CI check |
 | Govern | `ea-standards-base`, `ea-dispensation`, `ea-adr`, `ea-compliance`, `ea-service` | `validate-gov` — expiry and SLA are enforced, not filed |
-| Maintain | `ea-health`, `ea-change-triage`, `ea-board`, `ea-context` | `kpi`, `debt`, `staleness`, `conformance`, `correspondences`, `roadmap`, `delta`, `context`, `impact` |
+| Maintain | `ea-health`, `ea-change-triage`, `ea-board`, `ea-context` | `kpi`, `debt`, `staleness`, `conformance`, `correspondences`, `roadmap`, `delta`, `context`, `impact`; `elements list/show`, `relations list` to find what to ask them about |
 | Assess | `ea-model`, `ea-capability-map`, `ea-align` | `readiness` — the per-layer definition of done, every checkpoint naming its elements; `align --strict` — the model against a hash-pinned reference architecture, every unmapped node a named gap and every exclusion a recorded decision |
 | Propose | `ea-align`, `ea-adr` | `propose --from align\|readiness\|overlap\|time` — findings become staging skeletons with derived ids; the prose, the owner and the review date stay human, and the gate enforces it. Refuses rather than emitting anything the gate would reject |
 | Comply | `ea-regulatory`, `ea-ai-governance` | `dora-register` and `ai-act-register` — the Register of Information and the AI system inventory from the approved model, each naming the fields it could not fill; control gaps ride `align` as `ALN004` |
