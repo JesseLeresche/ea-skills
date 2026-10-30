@@ -381,6 +381,8 @@ prints exactly what it printed before — the feature is invisible until you opt
 When a change request arrives, do not eyeball its blast radius:
 
 ```bash
+python -m easkills elements list --root . --text <word>                # find the id first (also: elements show <id>, relations list)
+python -m easkills relations list --root . --from <element-id>         # what it points at
 python -m easkills impact --root . --scope <element-id>              # the approved model
 python -m easkills impact --root . --scope <element-id> --zone staging   # including proposals
 python -m easkills render --root .                                   # views to SVG, without the full docs run

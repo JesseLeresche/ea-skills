@@ -43,6 +43,8 @@ python -m easkills conformance    --root .            # ISO 42010 Clause 6 check
 python -m easkills correspondences --root .           # §6.9, with the rule each is held to
 python -m easkills roadmap        --root .            # plateaus, gaps, unscheduled intent
 python -m easkills delta          --root .            # what the facts know, the model doesn't
+python -m easkills elements list --root . --layer Application   # find elements (also elements show, relations list)
+python -m easkills relations list --root . --from <id>   # relationships out of an element
 python -m easkills impact  --root . --scope <id>      # blast radius + Phase H count
 python -m easkills context --root . --scope <id>      # agent context pack (AD-09)
 ```

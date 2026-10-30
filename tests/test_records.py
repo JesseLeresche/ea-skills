@@ -871,3 +871,13 @@ def test_cli_default_date_is_taken_from_the_patched_today(tmp_path, capsys, monk
     code, out, _ = run(capsys, ["new", "--title", "Dated", "--body", BODY, "--json"], tmp_path)
     assert code == 0
     assert json.loads(out)["record"]["when"] == "2031-05-06"
+
+
+@pytest.mark.parametrize(
+    ("public", "private"),
+    [("print_json", "_print_json"), ("fail", "_fail"), ("leaf", "_leaf")],
+)
+def test_public_aliases_are_the_underscore_names(public, private):
+    """modelquery reuses the JSON printer, the failure shape and the leaf parser through these."""
+    assert getattr(records, public) is getattr(records, private)
+    assert callable(getattr(records, public))

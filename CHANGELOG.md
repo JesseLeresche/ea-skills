@@ -7,6 +7,12 @@ project's build phases (design log with per-decision rationale:
 
 ## [Unreleased]
 
+### Added — `elements list`, `elements show` and `relations list`: read the model without opening YAML
+
+Three read-only commands so an agent can find model content by filter instead of reading the model files. `elements list` filters by layer, type, property and text; `relations list` by type, source and target; both support `--limit`, `--zone approved|staging` (the same overlay `validate` uses) and a flagless `--json` that adds `total`, `notes` and `skipped` (unreadable files, so a broken file is never a silent miss). `elements show` prints one element or relationship in full with its relationships in and out, the decisions that name it and the views that include it. They live in `easkills/modelquery.py` and read through `dsl.load_zone`; nothing is written, cached or indexed, and output is sorted by id.
+
+The unknown-scope errors of `impact` and `context` now end with `Did you mean: ...?` when ids are close; their text is otherwise unchanged. `records.py` gains the public aliases `print_json`, `fail` and `leaf` for the new module (no behaviour change). No rule, schema or golden output changes.
+
 ### Added — `decisions`: list, show, create, move and supersede decision records
 
 A new command group over `governance-log/decisions/`, built on a record-type-neutral core

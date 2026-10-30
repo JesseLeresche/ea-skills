@@ -28,7 +28,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from . import dsl, govern, ui
+from . import dsl, govern, modelquery, ui
 
 # Which way a change travels along each relationship type, and why. "forward" means
 # from `source` to `target`: change the source, the target feels it.
@@ -209,7 +209,7 @@ def analyse(
     model, _documents, _config = dsl.load_zone(root, zone)
     governance = govern.load(root)
     if scope not in model.elements:
-        raise ImpactError(f"'{scope}' is not an element in the approved model")
+        raise ImpactError(f"'{scope}' is not an element in the approved model{modelquery.did_you_mean(scope, model.elements)}")
 
     report = ImpactReport(
         root=root,

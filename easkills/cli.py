@@ -29,6 +29,7 @@ from . import (
     importer,
     intake,
     maturity as maturity_mod,
+    modelquery,
     oracle,
     promote as promote_mod,
     propose as propose_mod,
@@ -376,6 +377,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("oracle-info", help="print oracle version and coverage")
 
     decisions.register(sub)
+    modelquery.register(sub)
 
     return parser
 
@@ -932,6 +934,14 @@ def cmd_decisions(args: argparse.Namespace) -> int:
     return args.func(args)
 
 
+def cmd_elements(args: argparse.Namespace) -> int:
+    return args.func(args)
+
+
+def cmd_relations(args: argparse.Namespace) -> int:
+    return args.func(args)
+
+
 HANDLERS = {
     "validate": cmd_validate,
     "compile": cmd_compile,
@@ -966,6 +976,8 @@ HANDLERS = {
     "pin-oracle": cmd_pin_oracle,
     "oracle-info": cmd_oracle_info,
     "decisions": cmd_decisions,
+    "elements": cmd_elements,
+    "relations": cmd_relations,
 }
 
 

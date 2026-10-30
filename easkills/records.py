@@ -954,6 +954,12 @@ def _leaf(sub: Any, name: str, help_text: str, func: Callable[[argparse.Namespac
     return leaf
 
 
+# Public names for sibling command modules (modelquery) that share this plumbing.
+print_json = _print_json
+fail = _fail
+leaf = _leaf
+
+
 def add_parser(subparsers: Any, rtype: RecordType, command_name: str) -> argparse.ArgumentParser:
     group = subparsers.add_parser(command_name, help=f"list, show, create and update {rtype.name} records")
     sub = group.add_subparsers(dest=f"{command_name}_command", required=True)
