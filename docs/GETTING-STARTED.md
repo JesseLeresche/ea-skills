@@ -383,6 +383,9 @@ When a change request arrives, do not eyeball its blast radius:
 ```bash
 python -m easkills elements list --root . --text <word>                # find the id first (also: elements show <id>, relations list)
 python -m easkills relations list --root . --from <element-id>         # what it points at
+# change the model without hand-written YAML (staging only; `promote` stays the way into approved/):
+python -m easkills elements new --root . --type Node --name "Edge Gateway" --assumed --rationale "to confirm" --created-by "Your Name"
+python -m easkills relations new --root . --type Serving --from <a> --to <b> --assumed --rationale "to confirm"   # also elements set / retire / remove, relations remove
 python -m easkills impact --root . --scope <element-id>              # the approved model
 python -m easkills impact --root . --scope <element-id> --zone staging   # including proposals
 python -m easkills render --root .                                   # views to SVG, without the full docs run

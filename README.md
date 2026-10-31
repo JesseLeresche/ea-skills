@@ -98,6 +98,7 @@ python -m easkills context --root eval/example --scope app-erp-core   # agent co
 python -m easkills impact  --root eval/example --scope app-erp-core   # blast radius of a change
 python -m easkills roadmap --root eval/example                        # plateaus, gaps, unscheduled intent
 python -m easkills elements list --root eval/example --layer Application   # find elements; also `elements show`, `relations list`
+python -m easkills elements new --root eval/example --type Node --name Probe --assumed --rationale demo --created-by You --dry-run   # stage changes without YAML: `elements new/set/retire/remove`, `relations new/remove`
 ```
 
 To start your own architecture repository, copy [`template/`](template/) and follow

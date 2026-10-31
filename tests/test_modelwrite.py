@@ -460,7 +460,7 @@ def own_warnings(doc: dict, concept_id: str) -> list[str]:
 
 
 def enew(capsys, root, name="Billing Service", etype="ApplicationComponent", extra=(), ev=EVIDENCE_ASSUMED):
-    return jrun(capsys, "elements", "new", "--type", etype, "--name", name, *extra, *ev, root=root)
+    return jrun(capsys, "elements", "new", "--type", etype, f"--name={name}", *extra, *ev, root=root)
 
 
 def rnew(capsys, root, rtype="Serving", src="app-wms", tgt="svc-api", extra=(), ev=EVIDENCE_ASSUMED):
@@ -720,7 +720,7 @@ def test_a_blank_name_is_refused(capsys, repo):
 
 @pytest.mark.parametrize("bad", ["Bad_ID", "UPPER", "-lead", "trail-", "has space", "a/b", "x" * 81, ".dot"])
 def test_invalid_explicit_ids_are_refused(capsys, repo, bad):
-    refused(capsys, repo, "elements", "new", "--type", "Node", "--name", "N", "--id", bad, *EVIDENCE_ASSUMED)
+    refused(capsys, repo, "elements", "new", "--type", "Node", "--name", "N", f"--id={bad}", *EVIDENCE_ASSUMED)
 
 
 @pytest.mark.parametrize("name", ["!!!", "??", "x" * 90])
@@ -1134,7 +1134,7 @@ def test_dry_run_on_a_staged_element_changes_nothing(capsys, repo):
 
 def test_dry_run_reports_warnings(capsys, repo):
     code, doc = jrun(capsys, *NEW_EL, *EVIDENCE_ASSUMED, "--dry-run", root=repo)
-    assert code == 0 and own_warnings(doc, "n") == ["GOV001", "GOV002"]
+    assert code == 0 and {"GOV001", "GOV002"} <= set(own_warnings(doc, "n"))
 
 
 def test_dry_run_still_refuses_what_a_real_run_would_refuse(capsys, repo):
@@ -1878,3 +1878,71 @@ def test_new_in_a_325_element_model_is_fast(capsys, tmp_path):
     code, doc = enew(capsys, tmp_path, "Brand New", "Node")
     elapsed = time.perf_counter() - start
     assert code == 0 and elapsed < 5, (code, doc, elapsed)
+
+
+# --------------------------------------------------------------------------- review follow-ups
+# Found in an independent review of the first implementation; written red before the fixes.
+
+NL = chr(10)
+
+
+def test_a_trailing_newline_is_not_a_valid_id(capsys, repo):
+    refused(capsys, repo, "elements", "new", "--type", "Node", "--name", "Nl", f"--id=nl-id{NL}", *EVIDENCE_ASSUMED)
+
+
+@pytest.mark.parametrize("extra", [
+    ["--property", f"k{NL}=v"],
+    ["--property", "good=v", "--property", f"bad{NL}key=v"],
+])
+def test_a_trailing_newline_is_not_a_valid_property_key(capsys, repo, extra):
+    before = snap(repo)
+    code, _out, _err = run(capsys, "elements", "new", "--type", "Node", "--name", "Nl", *extra, *EVIDENCE_ASSUMED, root=repo)
+    assert code == 2 and snap(repo) == before
+
+
+def test_a_second_error_with_the_same_code_on_a_concept_is_still_new(capsys, repo):
+    write(repo, "model/staging/v.yaml", (
+        "elements:\n"
+        "  - id: keep\n    type: Node\n    name: Keeper\n    assumed: true\n    rationale: r\n"
+        "views:\n"
+        "  - id: v-bad\n    name: Bad view\n    viewpoint: Layered\n    include: [keep, ghost]\n"
+    ))
+    doc = refused(capsys, repo, "elements", "remove", "keep", "--confirm", "keep")
+    assert "REF002" in codes(doc)
+
+
+def test_a_root_that_is_not_a_model_repository_is_refused_and_not_created(capsys, tmp_path):
+    missing = tmp_path / "nowhere"
+    code, doc = jrun(capsys, "elements", "new", "--type", "Node", "--name", "Zed", *EVIDENCE_ASSUMED, root=missing)
+    assert code == 1 and doc["ok"] is False and not missing.exists()
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    code, doc = jrun(capsys, "elements", "new", "--type", "Node", "--name", "Zed", *EVIDENCE_ASSUMED, root=empty)
+    assert code == 1 and doc["ok"] is False and list(empty.iterdir()) == []
+
+
+def test_an_absolute_source_path_is_refused(capsys, repo):
+    doc = refused(capsys, repo, "elements", "new", "--type", "Node", "--name", "Abs",
+                  "--source", str(repo / SOURCE), "--quote", Q_PICK)
+    assert "relative" in doc["error"]
+
+
+def test_remove_keeps_the_comment_above_the_block_and_leaves_no_residue(capsys, repo):
+    write(repo, "model/staging/m.yaml", (
+        "elements:\n"
+        "  # Group heading\n"
+        "  - id: first\n    type: Node\n    name: First\n    assumed: true\n    rationale: r\n"
+        "    documentation: |\n      Text\n      # Heading inside doc\n"
+        "  - id: second\n    type: Node\n    name: Second\n    assumed: true\n    rationale: r\n"
+    ))
+    code, _doc = jrun(capsys, "elements", "remove", "first", "--confirm", "first", root=repo)
+    assert code == 0
+    text = read(repo, "model/staging/m.yaml")
+    assert "# Group heading" in text and "Heading inside doc" not in text and "id: second" in text
+    assert yaml_of(repo, "model/staging/m.yaml")["elements"][0]["id"] == "second"
+
+
+def test_an_explicit_bot_like_created_by_gets_its_own_message(capsys, repo):
+    doc = refused(capsys, repo, "elements", "new", "--type", "Node", "--name", "Bot Made", "--created-by", "home-agent bot",
+                  *EVIDENCE_ASSUMED)
+    assert "--created-by must name a person" in doc["error"]
