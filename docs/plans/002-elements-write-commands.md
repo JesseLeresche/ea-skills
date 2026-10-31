@@ -1,19 +1,19 @@
 # Plan 002: write commands for elements and relationships (staging only)
 
-**What:** Add `elements new`, `elements set`, `elements retire` and `relations new`. They write only into `model/staging/`, so `promote` stays the one way into `approved/`.
+**What:** Add `elements new`, `set`, `retire`, `remove` and `relations new`, `remove`. They write only into `model/staging/`, so `promote` stays the one way into `approved/`.
 **Why:** Agents can now read the model (plan 001) but still hand-write YAML to change it, which skips the relationship matrix and the provenance check until later.
 **Risk:** significant (new write commands; staging file layout interacts with `promote`)
-**Size:** 2 new files (`easkills/modelwrite.py`, `tests/test_modelwrite.py`), about 150 new tests, 4 commands
+**Size:** 2 new files (`easkills/modelwrite.py`, `tests/test_modelwrite.py`), about 190 new tests, 6 commands
 **Touches:** this fork only. Writes only under `model/staging/`; no rule, schema, `promote` or golden-output change.
 **Recommendation:** approve with the defaults below
 
 ## Needs your decision
 
-1. Where do new concepts go? **Default:** one file per concept, `model/staging/<id>.yaml`. A per-layer file looks tidier but is unsafe: promoting a staging file replaces the approved file of the same name, silently dropping everything else in it.
-2. What does `retire` mean? **Default:** set `properties.lifecycle: retired`. The element and its relationships stay; deleting is not offered. The reason goes in a decision record (`decisions new --element ID`).
-3. Should `new` stamp `owner` and `lastReviewed`? **Default:** no. `--owner` and `--last-reviewed` are optional. Staging only warns (GOV001/GOV002), and `promote` blocks until a human supplies them, as `promote.py` intends.
-4. `elements set` on an element that is only in `approved/`: **Default:** copy that whole approved file into staging at the same relative path, then edit the one element. The path match is what makes staging replace it. Output names the file, and `promote` already flags a replacement.
-5. Finding to act on separately: a staging element with an approved id, in a file at a different path, passes `promote` and then fails `validate` with ID001 (reproduced on `eval/example`). **Default:** I raise it as its own task; this plan avoids it.
+1. ✅ Approved. Where do new concepts go? **Default:** one file per concept, `model/staging/<id>.yaml`. A per-layer file looks tidier but is unsafe: promoting a staging file replaces the approved file of the same name, silently dropping everything else in it.
+2. Soft and hard delete (revised after review). **Default:** `retire` is the soft delete: set `properties.lifecycle: retired`; element and relationships stay; reason goes in a decision record (`decisions new --element ID`). New `remove` is the hard delete: it takes the element (or, for `relations remove`, the relationship) out of staging. For an approved element it stages a copy of the approved file without it, so nothing leaves `approved/` until a human runs `promote`, which already lists dropped content. `remove` refuses while relationships still point at the element (remove those first) and needs `--confirm ID`. **Open:** is that the hard delete you meant, and do you want `relations remove` too?
+3. Stamp `owner`, `lastReviewed`, and a creator (revised after review). **Default:** `owner` and `lastReviewed` are still not stamped: `--owner` and `--last-reviewed` are optional, staging only warns (GOV001/GOV002), and `promote` blocks until a human supplies them, as `promote.py` intends. New: `new` records who created the concept as `properties.createdBy`, from `--created-by NAME`, else `git config user.name`. It is written only when absent and `set` never changes it. No schema change is needed (`properties` is free-form). **Open:** an agent's git name is the bot, which is no use for "who to contact". Default: refuse when there is no `--created-by` and the git name is a bot; the agent passes the requesting person. Say if you'd rather allow the bot name.
+4. ✅ Default. `elements set` on an element that is only in `approved/`: **Default:** copy that whole approved file into staging at the same relative path, then edit the one element. The path match is what makes staging replace it. Output names the file, and `promote` already flags a replacement.
+5. ✅ Approved. Finding to act on separately: a staging element with an approved id, in a file at a different path, passes `promote` and then fails `validate` with ID001 (reproduced on `eval/example`). **Default:** I raise it as its own task; this plan avoids it.
 
 ---
 
@@ -35,10 +35,11 @@ Module placement: a new `easkills/modelwrite.py`, registered into the same `elem
 
 All commands take `--root`, `--dry-run` (show the file and findings, write nothing) and a boolean `--json` (one document to stdout).
 
-- `elements new --type T --name N [--id ID] [--documentation D] [--property k=v]... [--owner O] [--last-reviewed YYYY-MM-DD]` plus evidence, below.
+- `elements new --type T --name N [--id ID] [--documentation D] [--property k=v]... [--owner O] [--last-reviewed YYYY-MM-DD] [--created-by NAME]` plus evidence, below.
 - `elements set ID FIELD VALUE`. Fields: `name`, `documentation`, `owner`, `lastReviewed`, `properties.KEY`. Not `id`, `type`, provenance or lists: changing a type changes which relationships are legal, so use retire plus new.
 - `elements retire ID`. Already retired is a no-op, exit 0.
-- `relations new --type T --from A --to B [--id ID] [--access-type X] [--directed true|false] [--modifier M]` plus evidence.
+- `elements remove ID --confirm ID` and `relations remove ID --confirm ID`: hard delete, staging only (see decision 2). Refused if the id is unknown, if relationships reference the element, or if `--confirm` does not match.
+- `relations new --type T --from A --to B [--id ID] [--access-type X] [--directed true|false] [--modifier M] [--created-by NAME]` plus evidence. `createdBy` goes in the relationship's `properties` if REL004 allows it; otherwise it is omitted and the output says so.
 
 Evidence (new commands): either `--source FILE --quote TEXT` (repeatable pairs) or `--fact ID`, or `--assumed --rationale TEXT`. Neither, or `--assumed` without a rationale, is refused. A quote must exist in the named file: the existing PROV001-PROV008 checks decide, not new code.
 
@@ -59,6 +60,8 @@ Written first and shown red. Cases that matter:
 
 - `new`: each element type and layer; id derivation and collisions in both zones; evidence matrix (quote, fact, assumed, none, assumed without rationale); fabricated quote refused (PROV003); missing or out-of-repo source refused; approximate quote refused.
 - `relations new`: legal, illegal with alternatives, swapped direction hint, unknown endpoint, endpoint only in staging, attribute on the wrong type (REL004).
+- `remove`: staging-only element taken out (file removed when empty); approved element staged as a copy without it, `approved/` untouched, `promote` lists it as dropped; refused with relationships pointing at it, with a wrong `--confirm`, with an unknown id; `relations remove` likewise.
+- `createdBy`: from flag; from git name; bot name without flag refused; never overwritten by `set` (`properties.createdBy` refused as a field).
 - `set` and `retire`: each field; comments and line endings kept; approved-only element copied to the same path; element already in staging edited in place; unsafe YAML refused; concurrent change refused.
 - Never writes to `approved/` (whole-tree hash before and after); `--dry-run` writes nothing; a refusal leaves no file or directory.
 - Round trip: `new` then `validate` then `promote` on a copy of `eval/example`, plus the same for a `set` on an approved element.
@@ -79,7 +82,7 @@ Risks:
 Will not:
 
 - Write to `approved/`, or touch `promote`, validator rules, schemas or `.github/workflows`.
-- Delete concepts, change `type`, `id`, provenance or list fields, or add `relations set` or `relations retire`.
+- Remove from `approved/` directly (a removal is staged and takes effect only on `promote`), change `type`, `id`, provenance or list fields, or add `relations set` or `relations retire`.
 - Stamp `owner` or `lastReviewed`, or invent a rationale.
 - Resolve id prefixes or add a lock, cache or index.
 - Touch upstream.
@@ -91,7 +94,8 @@ Will not:
 
 - [ ] A new element and a new relationship reach `approved/` through `new`, `validate`, `promote` without hand-written YAML.
 - [ ] An illegal relationship and a fabricated quote are each refused with nothing written.
-- [ ] `set` and `retire` change one element and leave comments untouched.
+- [ ] `set` and `retire` change one element and leave comments untouched; `remove` of an approved element changes nothing in `approved/` until `promote`.
+- [ ] Every new concept carries `properties.createdBy`.
 - [ ] `approved/` is unchanged by every command; golden outputs and existing tests are unchanged.
 - [ ] The PR carries real transcripts and full-suite counts before and after.
 
