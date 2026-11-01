@@ -45,6 +45,7 @@ python -m easkills roadmap        --root .            # plateaus, gaps, unschedu
 python -m easkills delta          --root .            # what the facts know, the model doesn't
 python -m easkills elements list --root . --layer Application   # find elements (also elements show, relations list)
 python -m easkills relations list --root . --from <id>   # relationships out of an element
+python -m easkills elements new --root . --type Node --name "Edge" --assumed --rationale "to confirm"   # stage a change (also elements set/retire/remove, relations new/remove)
 python -m easkills impact  --root . --scope <id>      # blast radius + Phase H count
 python -m easkills context --root . --scope <id>      # agent context pack (AD-09)
 ```

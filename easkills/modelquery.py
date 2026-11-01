@@ -412,3 +412,7 @@ def register(subparsers: Any) -> None:
     r_list.add_argument("--from", dest="sources", action="append", metavar="ID", help="source element (repeatable, any of)")
     r_list.add_argument("--to", dest="targets", action="append", metavar="ID", help="target element (repeatable, any of)")
     r_list.add_argument("--limit", type=_limit, metavar="N", help="keep the first N rows")
+
+    from . import modelwrite  # the write leaves join the same groups; imported here to keep modelquery free of write code
+
+    modelwrite.add_leaves(esub, rsub)
