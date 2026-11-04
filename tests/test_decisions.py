@@ -406,9 +406,8 @@ def test_new_slug_option_in_text_mode_and_numbering(tmp_path, capsys):
 @pytest.mark.parametrize("slug", ["Bad", "has space", "-lead", "trail-", "a--b", "under_score", "x" * 71, "", "a\n"])
 def test_new_rejects_a_bad_slug_with_exit_2_and_writes_nothing(tmp_path, capsys, slug):
     before = sorted(p.name for p in tmp_path.rglob("*"))
-    with pytest.raises(SystemExit) as caught:
-        new(capsys, tmp_path, "--slug", slug)
-    assert caught.value.code == 2
+    code, _out, err = new(capsys, tmp_path, f"--slug={slug}")
+    assert code == 2 and "not a slug" in err
     assert sorted(p.name for p in tmp_path.rglob("*")) == before
 
 

@@ -110,6 +110,20 @@ def _real_date(value: Any) -> date | None:
         return None
 
 
+_SLUG_ARG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+_SLUG_ARG_LIMIT = 70  # the id is NNNN-<slug> and ids stay within 80 characters, with room for six digits
+
+
+def _slug_arg(value: str) -> str:
+    """An explicit id slug: lowercase words joined by single hyphens; never rewritten, so refused if off."""
+    if not _SLUG_ARG.fullmatch(value) or len(value) > _SLUG_ARG_LIMIT:
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is not a slug: use lowercase letters and digits separated by single hyphens, "
+            f"at most {_SLUG_ARG_LIMIT} characters"
+        )
+    return value
+
+
 def _date_arg(value: str) -> str:
     if _real_date(value) is None:
         raise argparse.ArgumentTypeError(f"{value!r} is not a real calendar date (YYYY-MM-DD)")
@@ -238,12 +252,12 @@ def _slug(title: str, limit: int) -> str:
     return (kept or slug[:limit]).strip("-") or "record"
 
 
-def allocate_id(rtype: RecordType, loaded: Loaded, title: str) -> str:
+def allocate_id(rtype: RecordType, loaded: Loaded, title: str, slug: str | None = None) -> str:
     numbers = [n for n in (sequence_number(i) for i in [*loaded.records, *loaded.stems]) if n is not None]
     number = max(numbers, default=0) + 1
     while True:
         prefix = f"{number:04d}-"
-        candidate = prefix + _slug(str(title), 80 - len(prefix))
+        candidate = prefix + (slug if slug is not None else _slug(str(title), 80 - len(prefix)))
         if candidate not in loaded.records and candidate not in loaded.stems:
             return candidate
         number += 1
@@ -783,7 +797,10 @@ def cmd_new(rtype: RecordType, args: argparse.Namespace, parser: argparse.Argume
     data.setdefault(rtype.date_field, today().isoformat())
 
     loaded = load(rtype, args.root)
-    data["id"] = allocate_id(rtype, loaded, str(data["title"]))
+    if args.slug is None:
+        data["id"] = allocate_id(rtype, loaded, str(data["title"]))
+    else:
+        data["id"] = allocate_id(rtype, loaded, str(data["title"]), slug=args.slug)
     problems = validate_candidate(rtype, args.root, data)
     status = data.get(rtype.status_field)
     if status not in rtype.initial_statuses:
@@ -978,6 +995,9 @@ def add_parser(subparsers: Any, rtype: RecordType, command_name: str) -> argpars
     p_new = _leaf(sub, "new", "create a record with the next free id", None)  # func set below
     p_new.set_defaults(func=functools.partial(cmd_new, rtype, parser=p_new))
     p_new.add_argument("--title")
+    p_new.add_argument(
+        "--slug", type=_slug_arg, metavar="SLUG", help="use NNNN-SLUG as the id instead of deriving the slug from the title"
+    )
     p_new.add_argument("--status", help=f"one of {', '.join(rtype.initial_statuses)} (default {rtype.default_status})")
     p_new.add_argument("--date", type=_date_arg, metavar="YYYY-MM-DD", help="default: today")
     p_new.add_argument(
