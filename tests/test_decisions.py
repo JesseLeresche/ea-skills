@@ -387,6 +387,38 @@ def test_new_slug_truncation_keeps_the_id_short_and_ends_on_an_alphanumeric(tmp_
     assert re.fullmatch(r"0001-[a-z0-9]+(-[a-z0-9]+)*", new_id)
 
 
+def test_new_slug_option_replaces_the_title_part_of_the_id(tmp_path, capsys):
+    title = "Standardise on one internationalisation approach for every customer facing channel we operate today"
+    code, out, _ = new(capsys, tmp_path, "--json", "--slug", "one-i18n-approach", title=title)
+    doc = json.loads(out)
+    assert code == 0 and doc["id"] == "0001-one-i18n-approach"
+    assert doc["file"].endswith("governance-log/decisions/0001-one-i18n-approach.yaml")
+    assert doc["record"]["title"] == title
+    assert (tmp_path / DIR / "0001-one-i18n-approach.yaml").is_file()
+
+
+def test_new_slug_option_in_text_mode_and_numbering(tmp_path, capsys):
+    put(tmp_path, "0004-earlier.yaml", dec_text("0004-earlier"))
+    code, out, _ = new(capsys, tmp_path, "--slug", "next-one")
+    assert code == 0 and "created 0005-next-one " in out
+
+
+@pytest.mark.parametrize("slug", ["Bad", "has space", "-lead", "trail-", "a--b", "under_score", "x" * 71, "", "a\n"])
+def test_new_rejects_a_bad_slug_with_exit_2_and_writes_nothing(tmp_path, capsys, slug):
+    before = sorted(p.name for p in tmp_path.rglob("*"))
+    with pytest.raises(SystemExit) as caught:
+        new(capsys, tmp_path, "--slug", slug)
+    assert caught.value.code == 2
+    assert sorted(p.name for p in tmp_path.rglob("*")) == before
+
+
+def test_new_slug_works_with_a_title_from_a_file(tmp_path, capsys):
+    source = tmp_path / "in.yaml"
+    source.write_text(f"title: From a file\ndecision: {DECISION}\nrationale: {RATIONALE}\n", encoding="utf-8")
+    code, out, _ = decisions_main(capsys, ["new", "--from-file", str(source), "--slug", "from-file", "--date", DATE, "--json"], tmp_path)
+    assert code == 0 and json.loads(out)["id"] == "0001-from-file"
+
+
 def test_new_slug_fallback(tmp_path, capsys):
     code, out, _ = new(capsys, tmp_path, "--json", title="???")
     assert code == 0 and json.loads(out)["id"] == "0001-record"
