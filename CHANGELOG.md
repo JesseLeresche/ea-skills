@@ -7,6 +7,10 @@ project's build phases (design log with per-decision rationale:
 
 ## [Unreleased]
 
+### Added — `decisions new --slug`: choose the id's slug instead of deriving it from a long title
+
+`decisions new` (and any record type on the shared core) takes `--slug SLUG`: the id becomes `NNNN-SLUG` while the title stays as written. The slug is lowercase letters and digits separated by single hyphens, at most 70 characters; it is used exactly as given and refused with exit 2 when it does not fit, never rewritten. Without `--slug` nothing changes: the slug is still derived from the title.
+
 ### Fixed — `promote` and `validate --zone staging` refuse an id that would be defined twice in `approved/`
 
 A staging file at a *new* path holding an id that an approved file at a different path also holds used to pass the promotion gate (dry run and real), because the in-memory merge replaces by id and only shadows approved files by path. After the move `approved/` held two definitions and `validate` failed with `ID001`. The merge now records each such replacement and the identifier check reports it as `ID001` against the staging file, naming the approved file and the two ways out: put the replacement at the same relative path as the approved file, or stage a copy of the approved file without the id. It covers elements, relationships, views, stakeholders and concerns. A failing gate already moves nothing, so `promote` needed no change.

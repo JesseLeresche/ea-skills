@@ -345,8 +345,8 @@ def test_rows_filters_and_across_flags_or_within(tmp_path):
 # --------------------------------------------------------------------------- allocate_id
 
 
-def _alloc(tmp_path, title="Use the thing"):
-    return records.allocate_id(NOTE, records.load(NOTE, tmp_path), title)
+def _alloc(tmp_path, title="Use the thing", slug=None):
+    return records.allocate_id(NOTE, records.load(NOTE, tmp_path), title, slug=slug)
 
 
 def test_allocate_first_id(tmp_path):
@@ -881,3 +881,23 @@ def test_public_aliases_are_the_underscore_names(public, private):
     """modelquery reuses the JSON printer, the failure shape and the leaf parser through these."""
     assert getattr(records, public) is getattr(records, private)
     assert callable(getattr(records, public))
+
+
+def test_allocate_uses_an_explicit_slug_instead_of_the_title(tmp_path):
+    assert _alloc(tmp_path, "A very long title that would make a very long id", slug="short") == "0001-short"
+
+
+def test_allocate_with_a_slug_still_counts_up_and_never_reuses_gaps(tmp_path):
+    put(tmp_path, "0003-x.yaml", note_text("0003-x"))
+    assert _alloc(tmp_path, slug="short-one") == "0004-short-one"
+
+
+@pytest.mark.parametrize("slug", ["a", "a1-b2", "0-1", "x" * 70])
+def test_slug_argument_accepts_plain_lowercase_words(slug):
+    assert records._slug_arg(slug) == slug
+
+
+@pytest.mark.parametrize("slug", ["", "Bad", "has space", "-lead", "trail-", "a--b", "under_score", "ünï", "x" * 71, "ok\n"])
+def test_slug_argument_rejects_everything_else(slug):
+    with pytest.raises(argparse.ArgumentTypeError):
+        records._slug_arg(slug)
