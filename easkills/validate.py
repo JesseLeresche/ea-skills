@@ -280,6 +280,22 @@ def check_identifiers(model: dsl.Model) -> list[Finding]:
                 concept=key,
             )
         )
+    for key, approved_path, staging_path in model.cross_file_replacements:
+        staged, approved = _rel(model.root, staging_path), _rel(model.root, approved_path)
+        mirrored = f"model/staging/{Path(approved).relative_to('model/approved').as_posix()}"
+        findings.append(
+            Finding(
+                "ID001",
+                SEVERITY_ERROR,
+                f"duplicate identifier '{key}': {staged} would leave it defined twice in approved/, "
+                f"also in {approved}. Fix one of: (1) put the replacement at the same relative path as "
+                f"the approved file ({mirrored}, which replaces that file whole, so carry its other "
+                f"content over; for an element, `elements set` does this), or (2) remove the old "
+                f"definition from the approved file by staging a copy of it without '{key}'",
+                file=staged,
+                concept=key,
+            )
+        )
     shared = set(model.elements) & set(model.relationships)
     for key in sorted(shared):
         findings.append(
@@ -1204,7 +1220,8 @@ def _run_checks(
 def validate(root: Path, zone: str = "approved", today: date | None = None) -> Report:
     """Validate a zone. ``staging`` is validated as an overlay on ``approved``:
     staging is a proposed delta, so its relationships may reference approved
-    elements and a same-id concept is an update proposal, not a duplicate."""
+    elements and a same-id concept in a file at the same relative path as the approved one is an
+    update proposal, not a duplicate (at another path it is ID001: the move would leave both)."""
     model, documents, _config = dsl.load_zone(root, zone)
     return _run_checks(model, documents, root, zone, today)
 
