@@ -147,6 +147,10 @@ class Model:
     stakeholders: dict[str, Stakeholder] = field(default_factory=dict)
     concerns: dict[str, Concern] = field(default_factory=dict)
     duplicate_ids: list[tuple[str, Path, Path]] = field(default_factory=list)
+    # (id, approved file, staging file): a staging concept replaces an approved one by id, but
+    # the approved file is *not* shadowed by path, so a move would leave both definitions in
+    # approved/. Filled only by ``load_merged``; empty everywhere else.
+    cross_file_replacements: list[tuple[str, Path, Path]] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -458,6 +462,13 @@ def load_merged(
     model = build_model(root, zone_label, approved_docs, config)
     overlay = build_model(root, zone_label, staging_docs, config)
     model.duplicate_ids.extend(overlay.duplicate_ids)
+    for bucket in ("elements", "relationships", "views", "stakeholders", "concerns"):
+        approved_bucket = getattr(model, bucket)
+        for concept_id, concept in sorted(getattr(overlay, bucket).items()):
+            if concept_id in approved_bucket:
+                model.cross_file_replacements.append(
+                    (concept_id, approved_bucket[concept_id].source_path, concept.source_path)
+                )
     model.elements.update(overlay.elements)
     model.relationships.update(overlay.relationships)
     model.views.update(overlay.views)

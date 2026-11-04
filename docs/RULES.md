@@ -37,7 +37,7 @@ repository. All three are catalogued in their own sections at the end.
 | `SCHEMA000` | error | The YAML file cannot be parsed, or its top level is not a mapping. |
 | `SCHEMA001` | error | The file violates `schema/model.schema.json` -- unknown key, missing required field, bad identifier pattern, or a `type` that is not an ArchiMate 3.2 concept. |
 | `SCHEMA002` | error | An `ea.config.yaml` value other rules depend on is unusable: `stalenessDays`/`quoteMatchThreshold` not a number or outside its usable range, or `factsRoot`/`sourcesDir` resolving outside the repository. The documented default is applied so the run still completes -- but a silently mis-set threshold decides whether fabricated quotes pass, so it is an error, never a fallback in silence. The file is additionally checked against `schema/ea-config.schema.json`, which closes the key vocabulary: an unknown top-level key or `costModel` rate key is this code too. Unlike an element's deliberately open `properties` map, a *tooling* key the tooling does not read is always a typo, and the failure is silent -- `stalenessDay` leaves the 365-day default in place while the repository looks fresh. A key both checks object to is reported once. |
-| `ID001` | error | Duplicate identifier. Reported against the second definition, naming the file holding the first. |
+| `ID001` | error | Duplicate identifier. Reported against the second definition, naming the file holding the first. In `--zone staging` and at the promotion gate it also fires when a staging file holds an id that an approved file at a **different** path holds: the move would leave both in `approved/`. |
 | `ID002` | error | The same identifier is used by both an element and a relationship. |
 | `REF001` | error | A relationship endpoint does not resolve to an element in this zone. |
 | `REF002` | error | A view includes an element that is not in the model. |
@@ -138,7 +138,10 @@ that has not started the documentation apparatus is not nagged about it.
 
 `staging` is validated as an **overlay on `approved`**: staging is a proposed delta,
 so a staging relationship may reference approved elements, and a staging concept
-re-using an approved id is an update proposal, not `ID001`. Governance metadata
+re-using an approved id is an update proposal, not `ID001` — as long as the staging file
+sits at the same relative path as the approved file that holds the id (see *File shadowing*).
+At a different path it is `ID001`, in the staging view and at the gate alike, because the
+move would leave two definitions in `approved/`. Governance metadata
 (`GOV001`/`GOV002`) warns in staging and blocks at the promotion gate
 (`python -m easkills promote`), which validates approved + staging merged, by
 approved-zone standards. Promotion is the only write path into `approved` (AD-02);

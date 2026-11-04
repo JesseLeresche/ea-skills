@@ -76,7 +76,19 @@ def test_staging_relationship_may_reference_approved_elements(repo):
     assert report.ok
 
 
-def test_staging_same_id_is_an_update_proposal_not_a_duplicate(repo):
+def test_staging_same_id_at_the_same_path_is_an_update_proposal_not_a_duplicate(repo):
+    """An update proposal is a staging file that replaces the approved file at the same path."""
+    approved = (repo / "model" / "approved" / "application.yaml").read_text(encoding="utf-8")
+    updated = approved.replace("Publishes the order API.", "Publishes the order API; updated after a new interview.")
+    assert updated != approved
+    _stage(repo, "application.yaml", updated)
+    report = validate.validate(repo, zone="staging", today=TODAY)
+    assert not [f for f in report.errors if f.code == "ID001"], report.render()
+    assert report.ok
+
+
+def test_staging_same_id_at_a_different_path_is_a_duplicate_after_the_move(repo):
+    """Plan 003: the same id in a differently named file would be defined twice in approved/."""
     _stage(
         repo,
         "update.yaml",
@@ -93,8 +105,8 @@ elements:
 """,
     )
     report = validate.validate(repo, zone="staging", today=TODAY)
-    assert not [f for f in report.errors if f.code == "ID001"], report.render()
-    assert report.ok
+    assert [f.concept for f in report.errors if f.code == "ID001"] == ["app-wms"], report.render()
+    assert not report.ok
 
 
 def test_missing_governance_metadata_warns_in_staging_but_blocks_promotion(repo):
