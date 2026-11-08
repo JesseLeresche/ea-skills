@@ -63,7 +63,7 @@ Do not hand-write the file or pick its number. `decisions new` allocates the nex
 `NNNN-slug` id, validates before it writes, and refuses rather than leaving a broken record:
 
 ```bash
-python -m easkills decisions new --root . --title "..." --status proposed \
+easkills decisions new --root . --title "..." --status proposed \
   --context "..." --decision "..." --rationale "..." --consequences "..." \
   --element service-order-api --element app-order-portal
 ```
