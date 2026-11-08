@@ -1,6 +1,10 @@
 ---
 name: ea-change-triage
 description: Classify an incoming architecture change request (TOGAF Phase H) and route it - simplification, incremental, or re-architecting. Use when a change request, new demand or drift report arrives and someone asks what to do with it, or whether a change "needs architecture".
+argument-hint: "[element-id]"
+allowed-tools:
+  - Bash(easkills *)
+  - Bash(python -m easkills *)
 ---
 
 # Change triage (Phase H)
@@ -18,7 +22,7 @@ The stakeholder-impact test is the load-bearing one, and **the tooling counts it
 you** -- do not eyeball it:
 
 ```bash
-python -m easkills impact --root <repo> --scope <element-id>
+easkills impact --root <repo> --scope <element-id>
 ```
 
 The report gives the blast radius (transitive, nearest-first, with the relationship
@@ -38,13 +42,21 @@ with the relationship that was meant.
 Use `--scope` on the element the change actually touches, and `--depth 1` first if the
 radius is large; the unbounded run is the honest one for a re-architecting call.
 
+Two more questions the tooling answers without a script. `easkills query --from
+<element-id> --rel appliesTo --direction in` lists the obligations binding the element
+before anyone argues about them, and `easkills query --where <key>~<token>` finds every
+element sharing a property the change turns on (a scope, a provider, a trust zone).
+After the change lands, `easkills diff --ref <commit before it>` is the record of what
+it actually touched in the approved model, field by field -- compare it with the radius
+you triaged.
+
 ## Rationalization candidates
 
 A change request that adds a system, or that lands on one of two systems doing the same
 job, needs one more read before it is classified:
 
 ```bash
-python -m easkills debt --root <repo>   # rationalization-candidate, overlapping-applications, duplicate-service
+easkills debt --root <repo>   # rationalization-candidate, overlapping-applications, duplicate-service
 ```
 
 * **`rationalization-candidate`** -- a capability realized by two or more application

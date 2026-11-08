@@ -10,7 +10,7 @@ and living governance out. All of it in git.
 [![CI](https://github.com/dithiothreitol/ea-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/dithiothreitol/ea-skills/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Validation rules](https://img.shields.io/badge/validation%20rules-150-brightgreen.svg)](docs/RULES.md)
+[![Validation rules](https://img.shields.io/badge/validation%20rules-167-brightgreen.svg)](docs/RULES.md)
 [![ArchiMate 3.2](https://img.shields.io/badge/ArchiMate-3.2-orange.svg)](oracle/NOTICE.md)
 [![ISO/IEC/IEEE 42010](https://img.shields.io/badge/ISO%2FIEC%2FIEEE-42010%3A2022-lightgrey.svg)](docs/RULES.md)
 
@@ -105,6 +105,26 @@ To start your own architecture repository, copy [`template/`](template/) and fol
 the [Getting-started tutorial](docs/GETTING-STARTED.md) — from a raw interview to a
 validated model, rendered views and a generated architecture description.
 
+### Use the skills from Claude Code
+
+The repository is also a Claude Code plugin. Installing it puts the skills, an
+`easkills` command and the approved-zone guard into every session, whichever
+architecture repository you open:
+
+```
+/plugin marketplace add dithiothreitol/ea-skills
+/plugin install ea-skills@ea-skills
+```
+
+The plugin brings the code, not the interpreter: `easkills` runs the plugin's own copy
+of the tooling with the first Python 3.11+ it finds (`$EASKILLS_PYTHON`, `python3`,
+`python`), which needs the three runtime dependencies installed
+(`pip install pyyaml jsonschema lxml`). From a clone, `python -m easkills` is the same
+command with the same arguments. While the plugin is enabled, a `PreToolUse` hook refuses
+any write into an architecture repository's `model/approved/` that does not go through
+`easkills promote`, and `ea-approve` is the one skill a model may not load on its own —
+you invoke it (`/ea-skills:ea-approve`) when you mean to sign something off.
+
 **Already have a model?** `import` reads an ArchiMate Open Exchange export (Archi,
 and most commercial tools) into `model/staging/`, and `intake-csv` turns an
 application-inventory spreadsheet into a source document whose quotes stay verifiable.
@@ -134,21 +154,23 @@ flowchart LR
 ```
 
 Every arrow is a deterministic command with an exit-code contract, and every stage is
-driven by one of the **25 [agent skills](skills/)** — from `ea-intake` through
+driven by one of the **26 [agent skills](skills/)** — from `ea-intake` through
 `ea-approve` to `ea-board`. The orchestrator (`ea-run`) routes requests catalog-first
 and keeps the stage order honest.
 
 | Stage | Skills | Deterministic gate |
 |---|---|---|
-| Ingest | `ea-intake`, `ea-delta-ingest`, `ea-import` | `validate-facts`, `coverage --min-coverage`; `intake-csv` makes a spreadsheet citable; `import` lands in staging, all `assumed` |
+| Ingest | `ea-intake`, `ea-delta-ingest`, `ea-import` | `validate-facts`, `coverage --min-coverage`; `intake-csv` and `intake-doc` make a spreadsheet, PDF, Word, PowerPoint or Excel file citable; clarification questions are records (`QST*`); `import` lands in staging, all `assumed` |
 | Model | `ea-capability-map`, `ea-model`, `ea-validate` | `validate` (staging as overlay), 3-repair cap |
 | Publish | `ea-approve` | `promote` — the only write path into `approved/` |
-| Document | `ea-stakeholders`, `ea-views`, `ea-docs` | `docs`, `render`, ISO loop rules, freshness CI check |
+| Document | `ea-stakeholders`, `ea-views`, `ea-docs` | `docs`, `render`, ISO loop rules, freshness CI check; `rtm` and `glossary` derive the traceability matrix and the glossary, as CSV for a spreadsheet when asked; `export` writes views as PlantUML (ArchiMate notation) or Mermaid; `render --heatmap` colours any view by a property |
 | Govern | `ea-standards-base`, `ea-dispensation`, `ea-adr`, `ea-compliance`, `ea-service` | `validate-gov` — expiry and SLA are enforced, not filed |
-| Maintain | `ea-health`, `ea-change-triage`, `ea-board`, `ea-context` | `kpi`, `debt`, `staleness`, `conformance`, `correspondences`, `roadmap`, `delta`, `context`, `impact`; `elements list/show`, `relations list` to find what to ask them about |
+| Maintain | `ea-health`, `ea-change-triage`, `ea-board`, `ea-context` | `kpi`, `debt`, `staleness`, `conformance`, `correspondences`, `roadmap`, `delta`, `context`, `impact`; `kpi --snapshot` commits the KPIs as a dated record and `trend` names what regressed; `diff` says what a plateau changes or what changed since a commit; `query` answers the questions no report was written for; `elements list/show`, `relations list` to find what to ask them about |
+| Serve | `ea-context` | `serve` — the approved model as a read-only MCP server, registered by the plugin: the reports as tools, the architecture description and context packs as resources, nothing that writes |
 | Assess | `ea-model`, `ea-capability-map`, `ea-align` | `readiness` — the per-layer definition of done, every checkpoint naming its elements; `align --strict` — the model against a hash-pinned reference architecture, every unmapped node a named gap and every exclusion a recorded decision |
-| Propose | `ea-align`, `ea-adr` | `propose --from align\|readiness\|overlap\|time` — findings become staging skeletons with derived ids; the prose, the owner and the review date stay human, and the gate enforces it. Refuses rather than emitting anything the gate would reject |
-| Comply | `ea-regulatory`, `ea-ai-governance` | `dora-register` and `ai-act-register` — the Register of Information and the AI system inventory from the approved model, each naming the fields it could not fill; control gaps ride `align` as `ALN004` |
+| Propose | `ea-align`, `ea-adr` | `propose --from align\|readiness\|overlap\|time\|coverage\|threats\|ai-act` — findings become staging skeletons with derived ids; the prose, the owner and the review date stay human, and the gate enforces it. Refuses rather than emitting anything the gate would reject |
+| Secure | `ea-security` | `validate` reads the security vocabulary (`SEC*`: public elements holding restricted data, trust-boundary crossings, personal data outside the GDPR scope) and only where a repository uses it; `exposure` walks what an attacker holding a public element could reach; `propose --from threats` writes an assessment per boundary crossing; `align` against NIST SP 800-53 or SP 800-207 names high-rated systems no control anchors (`ALN009`); `check --sbom` reads CycloneDX and SPDX |
+| Comply | `ea-regulatory`, `ea-ai-governance` | `dora-register`, `ai-act-register` and `gdpr-register` — the Register of Information, the AI system inventory and the GDPR Art. 30 record of processing from the approved model, each naming the fields it could not fill; `dora-register --format its-csv` writes one pre-filled worksheet per ITS template, every empty column named; `propose --from ai-act` writes a fundamental-rights impact assessment skeleton; every register and the architecture description render in English or Polish (`--lang pl`); control gaps ride `align` as `ALN004` |
 | Consume | `ea-check` | `check --scope` inside a product repo — standards lifecycle vs declared dependencies |
 | Evaluate | `ea-eval` | `score --min-f1` against the [golden set](eval/golden/); the score names every unmatched item, and relationships the model only *implies* count as half a match via ArchiMate's derivation rules |
 
@@ -165,7 +187,9 @@ reference approved elements; re-using an id proposes an update), so skills model
 delta rather than copying the world. The only way into `approved` is
 `python -m easkills promote`, whose gate validates the merged result by approved-zone
 standards — ownership and review dates, advisory while drafting, block there. The git
-commit of the move is the approval record.
+commit of the move is the approval record. With the plugin enabled, the rule is a
+mechanism and not only a sentence: a hook refuses writes into `approved/` by any other
+route — exactly for the file-editing tools, by pattern for shell commands.
 
 **The skills are measured, not just the tooling.** Prose cannot be executed by pytest, so
 the product used to be the untested half. `eval/harness/` now runs the skills against the
@@ -319,7 +343,7 @@ agents. What is not otherwise available is the *combination*:
 Verified against the 2026-07-29 competitive survey behind
 [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md); the ea-skills column reflects this
 repository as of 2026-08-07. Neighbours move fast, so this table carries a standing
-obligation: **re-check monthly, and correct it when a claim stops being true** — it is
+obligation: **re-check quarterly, and correct it when a claim stops being true** — it is
 tracked as an open item below and in [BLUEPRINT §8a](docs/BLUEPRINT.md), because no
 test can check a competitor's changelog. Each capability exists somewhere; the
 integration is the contribution, and the governance end is where it is thinnest
@@ -333,7 +357,7 @@ argued with.
 
 ## Status and roadmap
 
-**Phases 0–7 are complete** — see
+**Phases 0–7 are complete; Phase 8 is under way** ([plan](docs/PHASE8-PLAN.md)) — see
 [CHANGELOG.md](CHANGELOG.md) for the full history and
 [BLUEPRINT §8a](docs/BLUEPRINT.md) for per-phase design decisions.
 
@@ -347,12 +371,15 @@ argued with.
 | 5 | Evaluation: golden-set regression harness, capability comparison | **done** |
 | 6 | Service layer: offering catalog with SLAs, demand ledger, demand-weighted maintenance | **done** |
 | 7 | Reference, regulation, proposal: alignment to reference architectures, per-layer readiness, rationalization, cost, regulatory reporting, generated proposals, maturity | **done** |
+| 8 | Host, analyst, security, registers, time, measurement: the plugin and its guard, document intake and question records, security vocabulary and exposure, further registers and Polish output, diff/query/serve, a host eval | **done** (0.16.0–0.21.0) |
 
-Deliberately open (decisions, not backlog): the **network facade** (MCP/HTTP) over the
-read-only commands stays deferred until the demand ledger shows someone asking for it —
-`ea-check` shipped without it, and needs no service to run; §6.9 correspondences to AD
+Deliberately open (decisions, not backlog): the **network facade** is half shipped on
+purpose — `serve` speaks MCP over stdio to a local host, read-only, approved zone only
+(the AD-10 deferral reversed in 0.20.0, because demand cannot appear for a surface that
+does not exist); an HTTP transport, with the authentication and hosting it would bring,
+stays deferred until the demand ledger shows someone asking for it; §6.9 correspondences to AD
 elements in *another* architecture description stay underived, because nothing here can
-check the far end of one; the [comparison table](#how-it-compares) above carries a monthly
+check the far end of one; the [comparison table](#how-it-compares) above carries a quarterly
 re-check obligation that nothing can automate; and the worked example carries
 *scheduled* failures (a dispensation expiring 2027-06-30, a staleness horizon in
 mid-2027) as maintenance rehearsals — renewing the records, not weakening the gates,
@@ -369,7 +396,11 @@ oracle/          vendored, hash-pinned rule data + NOTICE.md
 references/      the open reference-model library adopters copy from (public domain /
                  public law only -- licensed models live in the adopter's repository)
 schema/          JSON Schemas -- all generated, never hand-edited
-skills/          the 25 agent skills (this is the product)
+skills/          the 26 agent skills (this is the product)
+.claude-plugin/  plugin and marketplace manifests -- the repository root is the plugin
+bin/             `easkills`, on the Bash tool's PATH while the plugin is enabled
+hooks/           the PreToolUse guard: approved/ changes only through `promote`
+evals/           `claude plugin eval` cases: host behaviour with and without the plugin
 template/        scaffold to copy for a new enterprise
 eval/example/    worked example, clean (doubles as the largest golden case)
 eval/golden/     golden-set cases for the regression harness
@@ -386,7 +417,7 @@ docs/            GETTING-STARTED, CLI reference, RULES catalogue, BLUEPRINT (des
 |---|---|
 | [Getting started](docs/GETTING-STARTED.md) | Tutorial: from a raw interview to a validated, documented architecture |
 | [CLI reference](docs/CLI.md) | Every command, flag and exit-code contract |
-| [Rule catalogue](docs/RULES.md) | All 150 validation rules with severities and rationale |
+| [Rule catalogue](docs/RULES.md) | All 167 validation rules with severities and rationale |
 | [Blueprint](docs/BLUEPRINT.md) | The research-verified design: decisions, evidence, per-phase log |
 | [Golden set](eval/golden/README.md) | How pipeline quality is measured |
 | [Skill coverage](docs/SKILL-COVERAGE.md) | Which instrument measures which skill — including where nothing does |

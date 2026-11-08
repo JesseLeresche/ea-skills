@@ -19,7 +19,11 @@ on:
       model:
         description: "Model id"
         required: false
-        default: "claude-sonnet-5"
+        default: "claude-sonnet-5-5"
+      candidates:
+        description: "Modelling candidates per run, the most-agreed-on kept (1 = off, else >= 3)"
+        required: false
+        default: "1"
       contracts:
         description: "Also run the governance contract harness (true/false)"
         required: false
@@ -29,8 +33,8 @@ jobs:
   evaluate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install
@@ -46,6 +50,7 @@ jobs:
             ${{ github.event.inputs.case && format('--case {0}', github.event.inputs.case) || '--all' }} \
             --runs ${{ github.event.inputs.runs }} \
             --model ${{ github.event.inputs.model }} \
+            --candidates ${{ github.event.inputs.candidates }} \
             --out run-records.json
 
       - name: Run the governance contracts
@@ -62,7 +67,7 @@ jobs:
       # becomes the baseline only when a human has read it and decided it should.
       - name: Keep the records
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eval-records
           path: |

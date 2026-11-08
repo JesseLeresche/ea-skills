@@ -1,16 +1,22 @@
 ---
 name: ea-health
-description: Run and interpret the model-health reports - EA debt register, staleness report and KPIs. Use when asked how healthy, current or trustworthy the model is, for an EA debt review, portfolio metrics, obsolescence exposure, or a periodic (e.g. quarterly) model health check.
+description: Run and interpret the model-health reports - EA debt register, staleness report, KPIs and their trend over committed snapshots. Use when asked how healthy, current or trustworthy the model is, whether it is getting better or worse, for an EA debt review, portfolio metrics, obsolescence exposure, or a periodic (e.g. quarterly) model health check.
+argument-hint: "[as-of YYYY-MM-DD]"
+allowed-tools:
+  - Bash(easkills *)
+  - Bash(python -m easkills *)
 ---
 
 # Model health: debt, staleness, KPIs
 
 ```bash
-python -m easkills debt      --root <repo>   # EA-smell queries -> debt register
-python -m easkills staleness --root <repo>   # review-age per element
-python -m easkills kpi       --root <repo>   # one-screen metrics
-python -m easkills roadmap   --root <repo>   # plateaus, gaps, and decided-but-unscheduled
-python -m easkills maturity  --root <repo>   # level 1-5 per dimension, and what blocks the next
+easkills debt      --root <repo>   # EA-smell queries -> debt register
+easkills staleness --root <repo>   # review-age per element
+easkills kpi       --root <repo>   # one-screen metrics
+easkills roadmap   --root <repo>   # plateaus, gaps, and decided-but-unscheduled
+easkills maturity  --root <repo>   # level 1-5 per dimension, and what blocks the next
+easkills kpi --root <repo> --as-of <date> --snapshot   # keep today's KPIs as a dated record
+easkills trend     --root <repo>   # the committed snapshots, and what regressed
 # each takes --json for machine-readable output and --as-of for reproducible runs
 ```
 
@@ -95,14 +101,23 @@ worse than staleness because it forges freshness).
 
 ## Reading KPIs
 
-Trends matter more than snapshots: run with `--json`, keep the outputs (e.g. in
-`governance-log/metrics/`), and compare. The ones that predict trouble:
+Trends matter more than snapshots, so keep the snapshot: `kpi --as-of <date>
+--snapshot` writes `governance-log/metrics/<date>.json`, and `trend` reads every one
+committed. Take one per health check, on the check's date, and commit it with the
+review -- a snapshot is a record of that day, so a second run on the same date is a
+no-op and a run after the model changed is refused rather than rewriting history.
+`trend` marks a metric **regressed** only where a direction is better; growth and open
+dispensations are neutral on purpose. `trend --strict` turns a regression into exit 1
+for a repository that wants the gate. The regressions that predict trouble:
 
 * **evidenced share falling** -- assumptions accumulating faster than confirmation;
 * **stale share rising** -- the review habit is decaying;
 * **obsolescence exposure growing** -- retirements outpacing migrations (check the
   matching dispensations exist and have credible expiry dates);
-* **unframed/unheld concerns** -- the documentation loop is reopening.
+* **unframed/unheld concerns** -- the documentation loop is reopening;
+* **open questions ageing** (the `Questions` line, present once `facts/questions/` holds
+  records) -- the oldest open question's age is how long the repository has known it does
+  not know something, and an open question nobody is named to answer is never asked.
 
 ## Reading the roadmap
 

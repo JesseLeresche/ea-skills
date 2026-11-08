@@ -7,6 +7,10 @@ project's build phases (design log with per-decision rationale:
 
 ## [Unreleased]
 
+### Changed — merged upstream 0.16.0–0.21.0
+
+This fork now carries upstream's releases 0.16.0 to 0.21.0 (host plugin, analyst inputs, security architecture, GDPR and DORA registers, `query`, `diff`, `trend`, `serve`, harness v3) beside the commands added here. Rule count after the merge: 167 (upstream's 163 plus `REL004` and `DEC006`–`DEC008` from this fork). Rule counts in the entries below are as they were when each was written.
+
 ### Added — `decisions new --slug`: choose the id's slug instead of deriving it from a long title
 
 `decisions new` (and any record type on the shared core) takes `--slug SLUG`: the id becomes `NNNN-SLUG` while the title stays as written. The slug is lowercase letters and digits separated by single hyphens, at most 70 characters; it is used exactly as given and refused with exit 2 when it does not fit, never rewritten. Without `--slug` nothing changes: the slug is still derived from the title.
@@ -61,6 +65,552 @@ XSD enumeration), `isDirected` (boolean, Association only) and `modifier` (Influ
 into the DSL and notes any value it cannot hold; the compiler writes them only when set, so
 existing models compile byte-for-byte as before. New rule `REL004` (error): the attribute is
 on a relationship type it does not belong to. 147 rules total.
+
+## [0.21.0] — 2026-10-25 — the measurement release
+
+Phase 8.6 — the measurement, retaken once against the final text of Phase 8. 163 rules,
+26 skills, 42 commands, 14 schemas — unchanged; this release changes the instrument and
+what it reports.
+
+### Changed — the harness request contract (harness v3)
+
+- **The output contract is a JSON schema the API enforces.** Replies were `FILE:` lines
+  and fenced YAML found by regular expressions, so a model that wrapped one block
+  differently lost a file and the score measured the parser. Now `output_config.format`
+  carries a schema (`{"files": [{"path", "content"}]}`) and a malformed reply cannot
+  happen. **Not a tool call, as the plan had it:** forcing a tool is a 400 on the current
+  models, and an unforced one adds "the model did not call the tool" — a failure of the
+  API surface, not of the skill being measured.
+- **The system prompt is cached** with the one-hour TTL (it is the skills' prose, the same
+  bytes for every run of a phase, and runs of a phase start more than five minutes apart),
+  and the conversation behind it automatically. Records count cache writes and reads
+  beside the uncached input.
+- **The history is append-only**, thinking blocks included: the whole assistant turn goes
+  back, because the current models bind thinking to the conversation that produced it.
+- **The default model is `claude-sonnet-5-5`**, the current generation of the tier every
+  earlier baseline used. Replies are streamed with a 64k ceiling. A refusal or a truncated
+  reply is a failed run, named; no fallback model is configured, because a reply rescued by
+  another model would be scored as this one; and each record names the model that answered.
+- **`--candidates k`** (k ≥ 3, default off) models the same register k times and keeps the
+  candidate the others agree with most — the medoid by element and relationship F1 among
+  candidates whose gate passed. Majority voting at the level of a whole model, because
+  voting element by element would assemble a model no candidate wrote. `eval.yml` gains
+  the input; `requirements-eval.txt` now requires the SDK release the contract was
+  verified against.
+
+### Measured — the fourth baseline (claude-sonnet-5-5, 3 runs per case)
+
+Six of six runs green, every phase gate passed, **no repair in any of the eighteen
+phases**, output about half of the third baseline's. **No category is comparable with the
+third baseline**: the model generation, the output contract and the prose of all five
+measured skills changed together.
+
+| Case | facts | entities | elements | relationships |
+|---|---|---|---|---|
+| `clinic` | 92% → 76% | 71% → 63% | 56% → 48% | 32% → 25% |
+| `contested` | 67% → 67% | 75% → 67% | 56% → 56% | 11% → 12% |
+
+Read off the named items: entity recall is 100% in every run and precision fell because
+more entities are named; no gold fact is missed, more are cut at different boundaries;
+and **clinic's capability layer is absent in all three runs** — the same three gold
+capabilities unmatched, no `Capability` written — which accounts for the element and
+relationship drop (`contested` has no capability layer in gold and did not move). The
+baseline was accepted because the default model changed, which made the old one a
+yardstick for no default run; the capability layer is recorded as the open question for
+the next measurement, not tuned against the run that raised it
+([`eval/harness/README.md`](eval/harness/README.md)).
+
+The governance contracts held nine of nine runs with no repair, comparable with the
+earlier runs because their checks are properties rather than similarities.
+
+### Measured — the first host eval (`claude plugin eval`, claude-sonnet-5-5, 3 runs per arm)
+
+Run once, in a Linux container with the CI job's own steps and flags, because the
+repository holds no API key for Actions; $1.97 for the suite. One case of four passed and
+the mean delta over a no-plugin arm is +0.21. **`no-unprompted-promotion` holds** — 3/3
+with the plugin consulted the gate and promoted nothing — and the intake skill fires and
+writes the register a plain host never writes. **The host does not yet run the gates the
+skills prescribe**: no `validate-facts` in any intake run, no `validate --zone staging` in
+any modelling run of either arm, and `model-into-staging` scores lower with the plugin
+than without (-0.11). The traces that would say why stayed in the container, so the
+workflow now keeps and uploads them (`--keep-temp`). Results and the per-case table:
+[`docs/SKILL-COVERAGE.md`](docs/SKILL-COVERAGE.md).
+
+## [0.20.0] — 2026-10-25 — the time release
+
+Phase 8.5 — the architect's questions about time, the ones no report was written for, and a
+surface for other agents. 163 rules (unchanged), 26 skills, 42 commands, 14 schemas.
+
+### Added — `kpi --snapshot` and `trend`: is the model getting better?
+
+`kpi` answered how the model is today, and the answer was printed and gone. `kpi --as-of
+<date> --snapshot` keeps it: the exact `--json` output, written to
+`governance-log/metrics/<date>.json` and validated by the fourteenth generated schema
+(`metrics.schema.json`). A snapshot is a **record**: `--as-of` is required because the file
+name is the date, a re-run of an unchanged model is a no-op, and a re-run after the model
+changed is refused — the record of a past date is not rewritten. The schema closes the top
+level and leaves every key `kpi` gains later optional, so a snapshot committed today stays
+readable.
+
+`trend` reads only what was committed — it never recomputes a past value from today's model
+— and prints one row per metric, one column per date, and what improved and what
+**regressed** since the previous snapshot. Only metrics with a better direction can
+regress; model growth, open requests and open dispensations are neutral, because calling a
+rise in a waiver count a regression would reward deleting records, the incentive `REG003`
+was written to avoid. An unreadable snapshot, or one whose name disagrees with its `asOf`,
+is named and exits 1; `--strict` makes a regression exit 1 too.
+
+### Added — `diff`: what a plateau changes, and what changed since a commit
+
+- **`diff --plateau FROM TO`** lists what enters, leaves and stays between two plateaus, and
+  the gaps at either end. Membership is the one `roadmap` reads — Aggregation and
+  Composition from the plateau, now a shared function (`reports.plateau_membership`) — so
+  the roadmap and the difference between its states cannot disagree. On the worked example
+  both plateaus hold the same system, and the report says so and points at the gap rather
+  than printing two empty lists.
+- **`diff --ref GIT-REF`** compares the approved zone with the approved zone at a commit,
+  read through `git ls-tree` and `git show` — nothing is checked out, the index is never
+  written, and a test byte-compares the working tree before and after. Changes are named
+  by field (`properties.lifecycle`, `owner`, `appliesTo`); moving a concept between files
+  is not a change.
+
+### Added — `query`: the questions nobody wrote a report for
+
+Type filters, property conditions and relationship hops over the same loaded model the
+reports read, in a table or JSON. `key~token` is **membership** in a space-joined value, so
+`regulatoryScope~dora` finds `dora gdpr` — the lesson 0.15.0 learned about equality on that
+property, built into the language — and `key=` finds an absent property. `--from` walks
+relationships and the `appliesTo` binding by name, each result saying the hop and the link
+it came by. Read-only; an unknown type, id or relationship is a refusal naming it.
+
+### Added — `export --format plantuml|mermaid` and `render --heatmap`
+
+- **PlantUML** uses the ArchiMate library in PlantUML's standard library, one procedure per
+  element and relationship type. The procedure names were copied from
+  `stdlib/archimate/Archimate.puml` at plantuml-stdlib commit `d4a391be`, not recalled, and
+  a test holds every type the oracle knows to one of them — a wrong name fails the whole
+  diagram in the tool somebody pasted it into. **Mermaid** has no ArchiMate notation, so a
+  view becomes a flowchart with `render`'s layer colours and dashed Realization.
+  Identifiers are made diagram-safe injectively (`a.b`, `a_b` and `a-b` stay three nodes,
+  and Mermaid's keywords are never node ids).
+- **`render --heatmap PROPERTY`** colours every box by one property — or `owner`, `layer`,
+  `type` — with a legend counting each value and dashed boxes for elements carrying none. A
+  closed vocabulary keeps its schema order, so a value has the same colour in every view.
+  Written beside the views (`<view>.heatmap-<property>.svg`), never over them.
+- **Names wrap onto two lines** instead of being cut at 24 characters; only the second line
+  is ever shortened. "Warehouse Management Sy…" is gone from the example's committed views,
+  which changed only in the boxes whose names were too long.
+
+### Added — `serve`: the approved model as a read-only MCP server
+
+The AD-10 deferral of a network facade is reversed (Phase 8 operator decision 3). `serve`
+speaks MCP over stdio — standard library only, the handshake revisions 2024-11-05 to
+2025-11-25 — and exposes the reports as tools (`validate`, `kpi`, `trend`, `staleness`,
+`debt`, `roadmap`, `readiness`, `impact`, `exposure`, `query`, `diff_plateaus`,
+`diff_since`, `context`, `rtm`, `glossary` and the three registers), and the architecture
+description and context packs as resources. **Read-only by construction**: the tool table
+is an allowlist of report functions, each marked `readOnlyHint`, a test runs every tool
+over a copy of a repository and byte-compares it afterwards, and nothing reads staging.
+Report code runs with stdout captured, so a stray print cannot corrupt the stream.
+Registers come back as the document, not its JSON: a host that prefers structured content
+would otherwise hand the model the rows without the notice and the gap section.
+
+The plugin registers it as `easkills` — inline in `plugin.json`, not as a root `.mcp.json`,
+which in this repository would also be read as the project's own MCP configuration where
+the plugin root is undefined. Checked end to end with Claude Code 2.1.268 on Windows: the
+server connected through `sh` and the wrapper, and a model call through it returned the
+example's KPIs. A test runs the exact registered command through the wrapper. The newer
+handshake-free protocol revision is not implemented; a client asking for it is answered
+the way the specification expects of a server that predates it.
+
+### Fixed
+
+- **`easkills.__version__` said 0.1.0 since 0.1.0.** Nothing compared it with anything until
+  `serve` started telling hosts its version. It now tracks `pyproject.toml`, the release
+  helper bumps it, and a test holds the two equal.
+
+## [0.19.0] — 2026-10-25 — the register release
+
+Phase 8.4 — the registers that were still missing, and the language they are read in. 163
+rules (+5), 26 skills, 37 commands.
+
+### Added — `gdpr-register`: the Art. 30 record of processing activities (`GDR001`–`GDR005`)
+
+The third register, built on the pattern the first two set (D7): scope is declared per
+element (`regulatoryScope` including `gdpr`, read through the shared splitter, so `dora gdpr`
+lands in both documents), the notice sits above the tables, the last section names every
+field the model could not fill, and nothing in scope produces no document. Seven `gdpr*`
+properties carry what Art. 30(1) asks — purpose, lawful basis (the six Art. 6(1) bases, a
+closed vocabulary printed with their paragraph references), data subjects, categories,
+recipients, transfers outside the EEA, retention.
+
+**The security-measures column is derived, never written.** Art. 30(1)(g) asks for a
+general description of the technical and organisational measures; the record lists the
+requirements, constraints and principles binding each element and the standards it claims,
+by the one definition of "governed" 0.18.0 introduced. An activity nothing governs is
+`GDR004`. **The Art. 9(2) condition is never carried by the model**, so every
+special-category row names it in the gap section — a blank column would read as "none
+needed".
+
+| Code | Severity | Catches |
+|---|---|---|
+| `GDR001` | warning | an in-scope activity with no purpose |
+| `GDR002` | error | special-category data with no lawful basis |
+| `GDR003` | warning | no retention |
+| `GDR004` | warning | nothing governs the activity, so its security-measures column is empty |
+| `GDR005` | info | an open dispensation on the activity, disclosed the way `REG003` discloses one |
+
+`GDR005` is beyond the plan: the other two registers disclose waivers, and a third that did
+not would have been the odd one out. `finco` gains two processing activities and a
+requirement binding both, and passes `gdpr-register --strict` in CI; `finco-broken` carries
+one case per code.
+
+### Added — `dora-register --format its-csv`: the ITS worksheets
+
+One CSV per implementing-technical-standard template the model can feed — B_02.01, B_02.02,
+B_05.01, B_06.01 of Commission Implementing Regulation (EU) 2024/2956 — every column present
+and headed by its code and name, only what the model carries filled, and a `README.md`
+naming every empty column and every template not exported. A new `providerLei` property
+(ISO 17442's twenty characters, pattern-checked) fills the provider-code columns; two LEIs
+under one provider name is a conflict and leaves the column empty. Byte-stable, and `--out`
+must name a directory.
+
+**The column codes come from a rendering of Annex I, not from the Official Journal.**
+EUR-Lex refused automated retrieval; the codes were read from springlex.eu's rendering of
+the regulation, and the generated README says to check them against the OJ before anyone
+relies on them. A pre-filled worksheet for whoever prepares the filing, never the filing:
+values stay in this repository's vocabulary, not the ITS code lists.
+
+### Added — `--lang en|pl` on `docs` and every register
+
+A message catalogue (`easkills/i18n.py`) with English and Polish for every string the
+architecture description and the three registers print. **English stays byte-identical** to
+0.18.0 — verified by comparing every generated document before and after the refactor —
+and is the default. `docs --lang pl` writes `architecture-description.pl.md` beside the
+English description; the worked example's is committed and held fresh by CI. Three tests
+hold the catalogue: every key exists in both languages, both carry the same placeholders,
+and every gap field a register can emit has wording. The model's own text — element names,
+documentation, rationale — is never translated, and rule messages on the terminal stay
+English.
+
+### Added — `propose --from ai-act`: fundamental-rights impact assessment skeletons
+
+The seventh source: an `Assessment` skeleton (`asm-fria-<element>`, Art. 27) for each
+high-risk system the organisation deploys with nothing bound to it. Art. 27 binds only some
+deployers, so the first placeholder asks whether it reaches the organisation at all. A
+re-run skips the system by name while the skeleton sits in staging. `aiRole` gains
+`gpai-provider` (Chapter V), the role an inventory most often forgets to say the
+organisation holds.
+
+### Fixed
+
+- **`eval/fixtures/aico` carried a latent `REL001`.** An application component *served* a
+  capability, which the 3.2 relationship matrix does not permit; it is now a `Realization`.
+  Nothing validated the register fixtures, so nothing saw it until the FRIA test ran the
+  gate over a copy. CI now runs `validate` over `finco` (strict) and `aico`.
+- **`tests/test_dora.py` counted DORA-tagged elements by equality.** The trap 0.15.0
+  removed from `dora.py` survived in the test that guards the fixture's shape; it surfaced
+  when two `finco` elements moved to `dora gdpr`. Membership, through the shared splitter.
+
+## [0.18.0] — 2026-10-25 — the security release
+
+Phase 8.3 — security architecture in the existing homes. 158 rules (+4), 26 skills, 36
+commands.
+
+### Added — a security vocabulary the tooling can read
+
+0.15.0 wrote down that security architecture belongs in the existing layers rather than a
+parallel structure, and left the homes empty: nothing could ask whether restricted data
+sat behind a public element, because nothing recorded either. Seven element properties,
+closed and prefixed (the `criticality` lesson — never close a generic word):
+`dataClassification` (public, internal, confidential, restricted), `personalData` (none,
+personal, special-category), `secConfidentiality`/`secIntegrity`/`secAvailability` (FIPS
+199's low, moderate, high — the scale the SP 800-53 baselines are selected by), `exposure`
+(internal, partner, public), and `trustZone`, a free label the rules compare for equality
+only. `regulatoryScope` gains `gdpr`, so the combinations grow to seven.
+
+"Governed" has **one definition**, used by every rule and report: a `Requirement`,
+`Constraint` or `Principle` binds the element, or it claims a standard. Nothing reads an
+obligation's text to decide whether it is "about security" — the rules state the narrower,
+checkable fact — and an `Assessment` does not govern.
+
+### Added — `SEC001`–`SEC003` in `validate`, and `ALN009` in `align`
+
+| Code | Severity | Catches |
+|---|---|---|
+| `SEC001` | warning | a public element holding confidential or restricted data — its own, or a data object it accesses — with nothing governing it |
+| `SEC002` | warning | a `Flow`/`Access`/`Serving`/`Triggering` between two trust zones, neither end governed |
+| `SEC003` | warning | personal data outside the GDPR scope |
+| `ALN009` | warning | an element rated high that no control of a control pack anchors, directly or through the requirement binding it |
+
+Every rule is silent until a repository uses the property it reads; the worked example
+uses none of it and a test keeps it silent. Each case in the negative fixture sits beside
+a negative half that must stay quiet — the governed ledger behind the same boundary, the
+profile already in GDPR scope, the rating anchored through a mapped requirement.
+
+**`ALN009` is in `align`, not in `validate` as the plan had it (`SEC004`).** It needs a
+control pack, and the model gate deliberately reads none: a repository with no reference
+pack is not an invalid repository. The question belongs to the family that already owns
+"measured against a yardstick".
+
+### Added — `exposure`: what an attacker holding a public element could reach
+
+From every `exposure: public` element, a breadth-first walk with hop counts and the
+relationship each element was reached by, then the sensitive data, the high-rated elements,
+the personal data, the trust boundaries crossed and the **ungoverned** elements in reach.
+
+**Reach is not change impact, and reusing `impact.PROPAGATION` as the plan said would have
+been wrong.** When the order API serves the portal, a change to the API reaches the portal
+— and an attacker in the portal reaches the API. `Serving` runs in opposite directions for
+the two questions. So reach has its own declared table (`security.REACH`), a reason beside
+every entry, held by a test to the oracle's relationship types exactly as `PROPAGATION` is.
+`Association` is never walked, for the reason `impact` gives. A report, always exit 0.
+
+### Added — `propose --from threats`
+
+The sixth source: one `Assessment` per relationship that crosses a trust boundary, bound to
+both ends (an `Assessment` is a Motivation element, so `appliesTo` is legal), with STRIDE's
+six categories in the placeholder and every judgement left to it. A governed crossing still
+gets a skeleton — `SEC002` asks whether anything governs the ends, not whether anyone
+assessed the boundary — and a written assessment does not silence `SEC002`, which keeps
+asking until a requirement or a standard does.
+
+### Added — `check` reads `pyproject.toml` and SBOMs
+
+`pyproject.toml` (PEP 621 dependencies and optional groups, and Poetry's tables) is the
+fourth manifest found by name. CycloneDX and SPDX JSON documents are passed explicitly with
+`--sbom` — an SBOM has no conventional file name worth guessing at — and a `detect:` rule
+with `manifest: sbom` names the package by URL without its version (`pkg:npm/pg`). Nested
+CycloneDX components are walked; an SBOM that is neither format, or missing, is `CHK000`,
+never a skip.
+
+### Added — two public-domain control packs
+
+- **`nist-sp-800-53-r5`** — twenty families and 300 base controls, **generated** from
+  NIST's own OSCAL catalog (version 5.2.0) by `tools/oscal_to_pack.py`, with 24 withdrawn
+  controls left out and counted. Generation from the machine-readable publication is
+  exact about identifiers, titles and parentage; re-running the script is the whole upgrade
+  procedure.
+- **`nist-sp-800-207`** — the seven zero-trust tenets, each lead sentence extracted
+  mechanically from the PDF of the cited edition. Two dashes in tenet 4 are drawn by a glyph
+  the PDF maps to no Unicode character; the pack's em dashes are an inference, and its
+  NOTICE says so rather than presenting them as extracted.
+
+Both carry **`structure not yet verified`**: produced from the primary source by code, not
+yet read by a person, which is what this repository calls verification. **MITRE ATT&CK is
+not shipped** — its terms are neither public domain nor public law, and admitting it would
+change the library's licence gate (`docs/PHASE8-PLAN.md`, operator decision 4).
+
+### Added — `ea-security`, the 26th skill, and `eval/fixtures/secco`
+
+The working discipline: classify from evidence, never lower a rating to clear a finding,
+the tooling finds paths and people judge threats, never transcribe a licensed catalogue.
+`ea-regulatory`, `ea-model`, `ea-check` and `ea-run` route to it. `secco` — a fictional
+software company with a public portal over an internal account service — is clean under
+`validate --strict` and `align --strict`, both gated in CI, the `finco` precedent: a food
+wholesaler would have had to invent a security posture to carry these properties.
+
+## [0.17.0] — 2026-10-25 — the analyst release
+
+Phase 8.2 — the analyst's inputs and tables. 154 rules (+8), 35 commands.
+
+### Added — `intake-doc`: PDF, Word, PowerPoint and Excel become citable
+
+An analyst's material is rarely markdown, and hand conversion breaks the verbatim chain at
+the one point it exists to hold. `python -m easkills intake-doc --file <doc>` converts a
+`.pdf`, `.docx`, `.pptx` or `.xlsx` into a markdown source in `facts/sources/`, on the
+`intake-csv` pattern: the header records the original's SHA-256 **and the library and
+version that read it**, so a library upgrade that reads a document differently arrives as a
+diff with its cause named. Body order is kept (a Word table stays between the paragraphs
+about it), headings stay headings, every page, slide — speaker notes included — and sheet is
+converted, and pipes inside cells are escaped so a row stays one quotable line.
+
+**What cannot be read is said, not skipped.** A PDF page with no text layer is a scanned
+image and this converter does no OCR, so the page is named in the header as unread rather
+than silently omitted — a source that skipped a page reads as complete. A workbook formula
+with no cached value (a file never recalculated) is named the same way. Nothing is
+interpreted: a slide titled "Target state" is a sentence to quote, not a plateau.
+
+The four libraries (`pypdf`, `python-docx`, `python-pptx`, `openpyxl`, all BSD/MIT) are an
+optional extras group — `requirements-intake.txt`, or `pip install -e .[intake]` — imported
+only when a file of their kind is converted. Without them the command refuses and names the
+install line. A test proves no core module imports any of them at module level; the core
+stays at three runtime dependencies.
+
+### Added — clarification questions are records (`QST001`–`QST006`)
+
+`ea-intake` has called questions "a first-class output" since Phase 1, and they had nowhere
+to live but a paragraph in a report the next report forgot. Now `facts/questions/*.yaml`
+holds them, schema-validated (the thirteenth generated schema): each points at the exact
+text that raised it, located in its source the way a fact's quote is; names who should
+answer (`addressedTo`); and is closed by naming the fact the answer produced
+(`answeredBy`), or withdrawn with a reason. Six rules in `validate-facts`:
+
+| Code | Severity | Catches |
+|---|---|---|
+| `QST001` | error | unreadable or schema-invalid question file |
+| `QST002` | error | the quote is not in its source (or the file is missing, or outside the repository) |
+| `QST003` | error | answered with no fact, or by a fact that does not exist |
+| `QST004` | error | duplicate question id across files |
+| `QST005` | warning | withdrawn without a reason |
+| `QST006` | error | an impossible date, or answered before raised |
+
+`QST005` and `QST006` go beyond the four the plan listed. `QST006` is the review lessons'
+first pattern applied before an incident rather than after one: `kpi` computes question age
+from `raised`, and a date the pattern accepts and the calendar does not would silently drop a
+question from the arithmetic — the `DISP008`/`REQ009` trap.
+
+Questions surface where they matter: `kpi` gains a **Questions** line (open, the oldest
+one's age, and open questions nobody is named to answer) — present only when a repository
+keeps question records, so every other repository's report is byte-identical — and the
+architecture description lists open questions as known unknowns in §6. The worked example
+carries one answered and one open question, and stays clean under `--strict`.
+
+### Added — `propose --from coverage`: a question skeleton per uncited statement
+
+The fifth `propose` source, and the first that writes outside the model:
+`facts/questions/proposed-questions.yaml`, one entry per source statement no fact cites.
+Each points at the file, the lines and **the statement's own text** — recovered from the
+source rather than taken from the coverage report's casefolded form, so the quote is the
+source's characters — and validates under `QST002` on arrival. The question opens with
+`PROPOSED --`: whether a statement is a fact somebody missed, boilerplate or genuinely
+ambiguous is a reading only a person can do. Ids carry the line and a short digest of the
+text, so two statements on one line stay distinct and a re-run skips every entry by name.
+
+### Added — `rtm` and `glossary`: the analyst's tables, derived
+
+Two tables an analyst used to keep by hand in a spreadsheet that went stale the day it was
+finished. Both are joins over what is already recorded, so they are as current as the
+model:
+
+- **`rtm`** — for every `Requirement`, `Constraint`, `Principle` and `Goal`: what it binds
+  (`appliesTo`), what realizes it, the facts and sources evidencing it, and the decisions
+  and compliance assessments about it or anything it binds. Rows carry the flags
+  `unbound`, `unrealized`, `assumed` where they hold.
+- **`glossary`** — the entity table with aliases and documentation, the facts that mention
+  each term, and the model elements that answer to it: by name or alias first, by citing
+  one of its facts only when no element carries the name (otherwise one fact naming three
+  systems would list all three under each).
+
+`--out` writes CSV for a `.csv` target — a spreadsheet is where these are read — and
+markdown otherwise. Neither is a gate.
+
+### Added — value streams and the ends of the motivation chain (`RDY011`, `RDY012`)
+
+`ValueStream`, `Goal` and `Outcome` have been valid since the schema was generated from the
+oracle, and nothing asked anything about them. `RDY011` reports a value stream nothing
+enables — no capability serves it or any of its stages, nothing realizes it — walking the
+containment family, so a stream whose stage is served is enabled through it and the stage
+of a served stream is not flagged on its own (the `RDY008` lesson, used as a design input).
+`RDY012` reports a goal or outcome nothing realizes. Both are warnings in a family that
+never gates unless asked; the worked example's goal is realized and stays silent.
+`ea-capability-map` gains a value-stream section.
+
+### Changed — skill prose
+
+`ea-intake` (converting documents; questions as records, from the skeletons),
+`ea-capability-map` (value streams), `ea-stakeholders` (an inferred concern is a recorded
+question), `ea-delta-ingest` (close the questions new material answers), `ea-model`,
+`ea-docs` (open questions in the description; `rtm`/`glossary` as extracts), `ea-health`
+(question age). Three of these are measured skills; their effect is measured once, at 8.6.
+
+## [0.16.0] — 2026-10-25 — the host release
+
+Phase 8.1 — the plan for the whole phase is [`docs/PHASE8-PLAN.md`](docs/PHASE8-PLAN.md),
+written from an audit of 0.15.0 verified against its own code.
+
+### Added — the repository is a Claude Code plugin
+
+The skills never reached a host on their own: `skills/` at the repository root is not a
+location Claude Code discovers, and nothing else was there to install. Now
+`.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` make the repository root
+the plugin root — no file moved — and two commands install it:
+
+```
+/plugin marketplace add dithiothreitol/ea-skills
+/plugin install ea-skills@ea-skills
+```
+
+Both manifests pass `claude plugin validate --strict`, and a new CI job runs that validator
+on a pinned Claude Code version, so a stricter future release arrives as a deliberate
+upgrade rather than a red build. A test keeps the manifest version equal to the package's,
+because a plugin version pins its users to that release.
+
+### Added — `easkills`, because an installed plugin is not importable
+
+A plugin lives outside every architecture repository, so `python -m easkills` fails from
+where the skills actually run. `bin/easkills` — on the Bash tool's PATH while the plugin is
+enabled — runs the plugin's own copy of the package with the first interpreter that really
+runs Python 3.11+ (probed, not found: on Windows `python3` can be the Store stub), and says
+exactly which dependency is missing and how to install it into *that* interpreter. It puts
+the plugin root on the import path of one process only: a global `PYTHONPATH` would let the
+plugin's `tests/` package shadow a project's own. Every skill now says `easkills`; from a
+clone, `python -m easkills` is the same command and every document keeps using it.
+
+### Added — the approved zone is guarded by a hook, not by a sentence (AD-02)
+
+`model/approved/` changing only through `promote` was an instruction in `ea-approve`. A
+rule that has to hold every time belongs in a mechanism, so `hooks/hooks.json` runs
+`hooks/guard_approved.py` before every file-editing and shell tool call and refuses —
+exit 2, with the reason and the way forward — any write under an architecture
+repository's approved zone that is not `easkills promote`.
+
+- **Exact for Write, Edit, MultiEdit and NotebookEdit**, whose target is a field.
+- **Best-effort for Bash and PowerShell**, whose target is read out of a command line:
+  redirections, `cp`/`mv` *destinations* (copying out of `approved/` to propose an update
+  is legitimate and passes), `rm`, `sed -i`, `git mv`/`git rm`, and the writing cmdlets.
+  SECURITY.md says plainly that this is a guard rail against accidents, not a boundary.
+- **Scoped so it never fires where it should not:** only where the repository root holds an
+  `ea.config.yaml`, and never inside the ea-skills checkout itself, whose golden cases and
+  fixtures are architecture repositories by shape and are maintained on purpose.
+- **Fails open on input it cannot parse**, because a hook that blocked everything it could
+  not read would make the host unusable.
+
+Twenty-two refusal/allowance cases are pinned in `tests/test_plugin.py`, including the
+promote-then-delete chain that a whole-command exemption would have let through.
+
+### Changed — every skill carries the frontmatter its role needs
+
+Each `SKILL.md` had `name` and `description` and nothing else. Now: `allowed-tools`
+pre-approves the deterministic CLI (`easkills`, `python -m easkills`) **and nothing else** —
+in particular nothing that spends money, which is why `ea-eval` does not pre-approve the
+harness; `argument-hint` where a skill takes a scope, a file or a date; and **`ea-approve`
+carries `disable-model-invocation: true`**, so the one skill whose act is a human sign-off
+runs only when the human invokes it.
+
+The host ignores an unknown frontmatter key without a word — verified against its own
+validator while writing this: `allowed-tool` for `allowed-tools` passes `claude plugin
+validate --strict`. So the vocabulary is closed by `tests/test_plugin.py` instead.
+
+**Not adopted, on purpose: `context: fork`.** The plan proposed it for `ea-intake` and
+`ea-import`, whose loops are long. A forked skill runs without the conversation, which is
+where a user's scoping instructions live ("only the 2026 interviews"), and by default in the
+background, which would let modelling start before intake finished. Neither effect can be
+measured until the host eval below has run, so the change waits for evidence.
+
+### Added — `evals/`: host behaviour, measured with and without the plugin
+
+Four cases for `claude plugin eval`, each run as a real Claude Code session with only this
+plugin loaded and again with none: intake from a raw interview (the register is written and
+`validate-facts` is run), **no promotion when asked whether a model is ready** (the gate may
+be dry-run; `approved/` must stay untouched), proposals that **stay skeletons** (a regex
+grader catches prose written over a `PROPOSED --` placeholder, and a test proves it against
+both answers), and modelling into staging with the gate run. Scaffolds copy the committed
+golden cases, so the fixtures cannot drift from them.
+
+`.github/workflows/plugin-eval.yml` runs the suite on dispatch only, on Linux (shell grants
+need an OS sandbox native Windows lacks), with the narrowest tool grants that let the skills
+work and a cost ceiling. **It has not run yet**: the command is gated behind a newer Claude
+Code build than the one this was written on. `docs/SKILL-COVERAGE.md` lists the instrument
+and claims nothing for it until it has numbers.
+
+### Changed — housekeeping the audit found
+
+- The comparison re-check moves to a **quarterly** cadence. Two monthly reminders went
+  unanswered in a row; a cadence somebody keeps beats a stricter one nobody does.
+- `eval.yml` uses the action versions `ci.yml` uses.
+- `.gitignore` covers `.claude/settings.local.json` (it was ignored only by one maintainer's
+  global configuration) and `evals/results/`.
 
 ## [0.15.0] — 2026-08-08 — the AI governance release
 

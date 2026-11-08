@@ -1,6 +1,10 @@
 ---
 name: ea-check
 description: Check a product/service repository against the architecture standards its system claims to follow. Use when asked "are we compliant?", "does this repo break any standard?", when adding or upgrading a dependency, or when wiring an EA gate into a team's CI. Runs in the consuming repository, not in the EA repository.
+argument-hint: "[element-id] [consuming-repo-path]"
+allowed-tools:
+  - Bash(easkills *)
+  - Bash(python -m easkills *)
 ---
 
 # ea-check — compliance lint inside a consuming repository
@@ -11,7 +15,7 @@ filed; the product repository knows what it actually declares. `check` joins the
 
 ## Non-negotiables
 
-- **The command decides, you explain.** `python -m easkills check --root <ea-repo>
+- **The command decides, you explain.** `easkills check --root <ea-repo>
   --repo . --scope <element-id>` produces the findings. Never assess compliance by
   reading a manifest yourself and reasoning about standards — that is exactly the
   judgement this tooling exists to replace.
@@ -27,6 +31,14 @@ filed; the product repository knows what it actually declares. `check` joins the
 - **The consuming repository maintains no manifest.** `--scope` is the entire
   convention. If you find yourself proposing a mapping file in the product repo, stop:
   that is a deferred decision (AD-09), not an implementation detail.
+
+## What it reads
+
+`package.json`, `pom.xml`, `requirements.txt` and `pyproject.toml` (PEP 621 and Poetry)
+are found by name. An SBOM -- CycloneDX or SPDX JSON, the one the build already produces
+-- is passed explicitly with `--sbom <file>` (repeatable), and a SIB `detect:` rule names
+the package by URL without its version (`manifest: sbom`, `dependency: pkg:npm/pg`). The
+version an SBOM records is reported, never matched.
 
 ## Procedure
 

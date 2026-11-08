@@ -11,8 +11,9 @@ Severity meanings:
 * **info** -- a declared, accepted state worth surfacing (currently: assumptions).
 
 Three validators share this catalogue: `python -m easkills validate` covers the model
-zones (`ORACLE`/`SCHEMA`/`ID`/`REF`/`PROV`/`GOV`/`MOT`/`STD`/`ISO`/`REL`/`NAME`/`SMELL`/`PLAT`),
-`python -m easkills validate-facts` covers the fact register (`FACT`/`ENT`/`SRC`), and
+zones (`ORACLE`/`SCHEMA`/`ID`/`REF`/`PROV`/`GOV`/`MOT`/`STD`/`ISO`/`REL`/`NAME`/`SMELL`/`PLAT`/`SEC`),
+`python -m easkills validate-facts` covers the fact register and its clarification
+questions (`FACT`/`ENT`/`SRC`/`QST`), and
 `python -m easkills validate-gov` covers the standards base, governance log, the
 service layer and the correspondences that cross between them
 (`SIB`/`DEC`/`DISP`/`COMP`/`SVC`/`REQ`/`CORR`). Three further commands own a family each,
@@ -134,6 +135,26 @@ that has not started the documentation apparatus is not nagged about it.
 | `NAME004` | warning | Another element of the same type already has this name. Duplicate names are an EA smell and break traceability for anyone reading a view. |
 | `SMELL001` | warning | The element has no relationships (isolated element / dead component). `appliesTo` bindings count as connectivity, in both directions. |
 
+## Layer 2 -- security vocabulary (the SEC family)
+
+Security architecture lives in the existing homes -- obligations in the motivation layer,
+standards in the SIB, accepted risk as dispensations -- and these rules read the
+vocabulary that makes those homes checkable: `dataClassification`, `personalData`,
+`secConfidentiality`/`secIntegrity`/`secAvailability`, `exposure`, `trustZone` (closed
+enums, except the zone, which is a label compared for equality). **Every rule is silent
+until a repository uses the property it reads.**
+
+"Governed" has one definition: a `Requirement`, `Constraint` or `Principle` binds the
+element through `appliesTo`, or the element claims a standard. Nothing reads an
+obligation's *text* to decide whether it is about security -- the rules state the narrower,
+checkable fact. An `Assessment` does not govern: it is the question, not the treatment.
+
+| Code | Severity | Rule |
+|---|---|---|
+| `SEC001` | warning | An element with `exposure: public` holds confidential or restricted data -- its own `dataClassification`, or that of a data object it `Access`es -- and nothing governs it. A public portal holding no classification of its own still holds the restricted record it reads. |
+| `SEC002` | warning | A `Flow`, `Access`, `Serving` or `Triggering` relationship between two elements whose `trustZone` values differ, and neither end is governed. A trust boundary crossed with no recorded control on either side. `propose --from threats` writes the assessment the crossing needs. |
+| `SEC003` | warning | An element holding `personalData` (personal or special-category) is outside the GDPR scope -- `regulatoryScope` does not include `gdpr`. The record of processing activities would silently omit it, and under-inclusion is the failure mode of a register. |
+
 ## Zone semantics, and what promotion actually does
 
 `staging` is validated as an **overlay on `approved`**: staging is a proposed delta,
@@ -189,6 +210,25 @@ Portal" from becoming three different applications downstream.
 | `ENT002` | error | A canonical name or alias resolves to more than one entity. One term, one entity -- a collision means downstream modelling would silently merge two things. |
 | `ENT003` | warning | The entity is never referenced by any fact. |
 | `SRC001` | warning | A file under `facts/sources/` is never cited by any fact -- it has not been ingested, or contains nothing extractable (which the intake report should say explicitly). |
+
+## Fact register -- clarification questions
+
+Questions are records (`facts/questions/*.yaml`), because a question written in a report is
+forgotten by the next report. A question points at the exact text that raised it -- located
+in the source the way a fact's quote is -- names who should answer, and is closed by
+pointing at the fact the answer produced, or withdrawn with a reason. `kpi` counts the open
+ones and their age, and the architecture description lists them as known unknowns.
+`python -m easkills propose --from coverage` writes skeletons for every source statement no
+fact cites; the question itself is always a human's to write.
+
+| Code | Severity | Rule |
+|---|---|---|
+| `QST001` | error | A question file cannot be parsed, or violates `schema/question.schema.json` -- unknown key, missing field, a status outside open/answered/withdrawn. |
+| `QST002` | error | The question's source file does not exist, resolves outside the repository, or does not contain the quote. A question has to point at the text that raised it, or nobody can tell what was asked about. |
+| `QST003` | error | `status: answered` with no `answeredBy`, or `answeredBy` naming a fact that is not in the register. An answer that produced no fact is a conversation, not evidence. |
+| `QST004` | error | Duplicate question id, reported against the second definition with the file holding the first. |
+| `QST005` | warning | `status: withdrawn` with no `notes`. The next reader cannot tell a question that stopped mattering from one somebody gave up on. |
+| `QST006` | error | `raised` or `answered` passes the date pattern but is not a real calendar date, or `answered` is before `raised`. `kpi` reports open-question age from these, so an unreadable date silently drops a question from the arithmetic -- the `DISP008`/`REQ009` trap, closed before anyone fell into it here. |
 
 ## Governance log -- standards base
 
@@ -364,6 +404,8 @@ idiomatic modelling teaches people to ignore the report.
 | `RDY008` | warning | Technology | A `Node`/`Device`/`SystemSoftware` that serves and realizes nothing. Infrastructure nothing runs on cannot be costed, retired or impact-assessed. |
 | `RDY009` | warning | Motivation | A `Requirement`/`Constraint` with no `appliesTo` at all. Distinct from `MOT001`, where the selector exists and points at something absent: here the obligation has no bearer, so no context pack will ever serve it to the team it was written for. |
 | `RDY010` | warning | cross | The fact register covers a layer (via `topics:`) that the model leaves empty — evidence gathered and never modelled, the one kind of incompleteness the *sources* can prove. The facts carrying the topic are named. `topics:` is a free tag by schema, so only values that name a layer are read: `risk` and `integration` are real topics in the golden set and neither is a layer. |
+| `RDY011` | warning | Strategy | A `ValueStream` nothing enables: no capability serves it or any of its stages, and nothing realizes it. Stages are value streams composed into the stream, so the check walks the whole containment family -- a stream whose stage is served is enabled through it, and the stage of a served stream is not flagged on its own. |
+| `RDY012` | warning | Motivation | A `Goal` or `Outcome` nothing realizes: an end no part of the architecture is claimed to produce. Either the realizing capability, outcome or requirement is unmodelled, or the aspiration has no plan behind it -- and only the second is worth keeping as it is. |
 
 ## Reference alignment -- `align` (the ALN family)
 
@@ -406,6 +448,7 @@ is not a pin. The taxonomy is what must not move underneath a coverage claim.
 | `ALN006` | error | Two mapping entries target one reference node. One node, one recorded judgement — the first is kept and the second reported, because two entries usually disagree. |
 | `ALN007` | warning | A mapping claims coverage from an element that exists only in `model/staging/`, while the report reads `approved`. The node stays a gap until the proposal is promoted; `--zone staging` is how to ask what promotion would close. |
 | `ALN008` | error | The pack declares no nodes. An empty yardstick reports full coverage of nothing, which is worse than no yardstick at all. Silent when `ALN000` already said the taxonomy did not parse. |
+| `ALN009` | warning | An element rated high (`secConfidentiality`, `secIntegrity` or `secAvailability`) that no `kind: control` node of the pack anchors -- mapped directly, or through a requirement, constraint or principle that binds it. Only a pack with control nodes asks the question, and each pack is asked separately: a high rating nobody can trace to a control is a claim about risk with no claim about treatment. |
 
 Local elements that no mapping anchors are reported as **information, never as
 findings**. A business does things its industry blueprint never heard of, and a tool that
@@ -460,6 +503,31 @@ document is produced at all.
 | `AIR003` | info | A `high`- or `limited`-risk element is covered by an **open dispensation**. Accepted AI risk to disclose, not a violation to fix -- the mandatory expiry on a dispensation fits model-risk acceptance exactly, and closing the waiver to clear the report would lose the record of the exposure. |
 | `AIR004` | warning | An inventory section is empty while in-scope content exists. Silence in a regulatory document reads as "nothing to report". The provider section is only expected once some in-scope system was made by someone else (role `deployer`/`importer`/`distributor`) -- an estate that builds everything it runs owes no such section. |
 | `AIR005` | error | An approved element is classified as a **prohibited practice** (Art. 5). That is not a row to file but a decision the board must see: retire the practice or correct the classification, and record whichever happened. |
+
+## Regulatory register -- `gdpr-register` (the GDR family)
+
+`python -m easkills gdpr-register` generates the GDPR Art. 30 record of processing
+activities from the approved model. Scope is `regulatoryScope` including `gdpr`, read
+through the same splitter as the other registers, so an element tagged `dora gdpr` is in
+both documents. The record reads `personalData` and the `gdpr*` properties
+(`gdprPurpose`, `gdprLawfulBasis` -- the six Art. 6(1) bases as a closed vocabulary --
+`gdprDataSubjects`, `gdprDataCategories`, `gdprRecipients`, `gdprTransfer`,
+`gdprRetention`). The security-measures column (Art. 30(1)(g)) is **derived**, never
+written: the requirements, constraints and principles that bind the element and the
+standards it claims, by the same definition of "governed" the SEC family uses. The Art. 9(2)
+condition for special-category data is never carried by the model, so every such row
+names it in the gap section rather than leaving a blank that reads as "none needed".
+Everything the REG family established holds: the notice sits above the tables, the last
+section names every field the model could not fill, and with nothing in scope no document
+is produced.
+
+| Code | Severity | Rule |
+|---|---|---|
+| `GDR001` | warning | An in-scope processing activity has no `gdprPurpose`. The purpose is the first thing a record of processing states, and every other field is read against it. |
+| `GDR002` | error | An activity holds `special`-category data with no `gdprLawfulBasis`. Special-category processing with no recorded basis is not a partial row, it is the row a supervisor reads first. |
+| `GDR003` | warning | An in-scope activity has no `gdprRetention`. Storage limitation needs an envisaged time limit, and "we keep it" is not one. |
+| `GDR004` | warning | Nothing governs the activity: no requirement, constraint or principle binds it and it claims no standard, so its security-measures column is empty. An assessment does not govern -- the finding stays until an obligation does. |
+| `GDR005` | info | An activity is covered by an **open dispensation**. An exception on a processing activity is disclosed, not a violation to fix, for the same reason as `REG003`. |
 
 ## Consuming repositories -- `ea-check` (AD-09)
 

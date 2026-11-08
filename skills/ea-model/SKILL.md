@@ -1,6 +1,9 @@
 ---
 name: ea-model
 description: Author or extend the ArchiMate model in this repository's YAML DSL. Use when adding elements, relationships or views to an EA model repo, when modelling a business/application/technology landscape from notes or interviews, or when asked to "model", "add to the architecture model", or "put this in ArchiMate". Enforces evidence-backed modelling and defers all semantic judgement to the validator.
+allowed-tools:
+  - Bash(easkills *)
+  - Bash(python -m easkills *)
 ---
 
 # Authoring the enterprise architecture model
@@ -46,7 +49,7 @@ supported state. Silently inventing a plausible element is the one unrecoverable
 mistake, because a reader cannot tell it from a real one.
 
 **2. Write to `model/staging/` unless told otherwise.** `approved/` is human-signed
-content; the only path into it is `python -m easkills promote` (see the `ea-approve`
+content; the only path into it is `easkills promote` (see the `ea-approve`
 skill), on explicit human instruction. Staging validates as an *overlay* on approved:
 your proposed relationships may reference approved elements, and re-proposing an
 existing id is an update, not a duplicate -- so model the delta, do not copy approved
@@ -55,7 +58,7 @@ content into staging.
 **3. Run the validator before you claim to be finished.**
 
 ```bash
-python -m easkills validate --root <repo> --zone staging
+easkills validate --root <repo> --zone staging
 ```
 
 Fix errors, re-run. **Cap yourself at three repair iterations.** If violations survive
@@ -133,6 +136,11 @@ properties:
 Only record what the sources actually support. A `technicalFit` you made up is worse
 than a missing one.
 
+Security properties (`dataClassification`, `personalData`, the `sec*` ratings, `exposure`,
+`trustZone`) follow the same rule, and `ea-security` says what each one switches on. A
+restricted data object or a public portal is worth recording the day a source says so;
+a rating guessed to fill the field is not.
+
 ## Relationships
 
 Direction matters and is the most common mistake. `ApplicationComponent --Realization-->
@@ -196,11 +204,12 @@ Two halves, and neither answers on its own.
 **The mechanical half** lists what the layer does not yet record:
 
 ```bash
-python -m easkills readiness --root <repo> --zone staging
+easkills readiness --root <repo> --zone staging
 ```
 
 Per layer, per checkpoint, **naming the elements**: capabilities nothing realizes and
-nothing has assessed, processes attached to neither a capability nor a service,
+nothing has assessed, value streams nothing enables, goals and outcomes nothing realizes,
+processes attached to neither a capability nor a service,
 components with no `lifecycle`/`timeDisposition` (invisible to every portfolio report),
 services with no consumer, infrastructure that serves nothing, obligations that bind
 nothing, and layers the fact register covers while the model does not. Nothing there is

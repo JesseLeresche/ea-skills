@@ -1,6 +1,10 @@
 ---
 name: ea-board
 description: Prepare the Architecture Board agenda and minutes from the governance log and health reports. Use when asked to prepare, run or minute an architecture board / governance review meeting, or to summarise what needs architectural decision this period.
+argument-hint: "[as-of YYYY-MM-DD]"
+allowed-tools:
+  - Bash(easkills *)
+  - Bash(python -m easkills *)
 ---
 
 # Architecture Board support
@@ -13,18 +17,23 @@ an open assumption.
 
 Collect, in this order (the standing agenda):
 
-1. **Expiring and expired dispensations** -- `python -m easkills validate-gov`
+1. **Expiring and expired dispensations** -- `easkills validate-gov`
    (`DISP003` errors, `DISP006` warnings). Each is a decision: renew (why is
    compliance still impossible?) or close (what changed?).
-2. **Open assumptions** -- `PROV006` items from `python -m easkills validate`; each
+2. **Open assumptions** -- `PROV006` items from `easkills validate`; each
    either gets confirmed into evidence, accepted for another period (say so in the
    minutes), or removed.
 3. **Compliance assessments since last board** -- `governance-log/compliance/`,
    leading with `non-conformant` verdicts and their follow-up state (`COMP003`
    flags the ones going nowhere).
 4. **Proposed decisions** -- ADRs with `status: proposed` awaiting acceptance.
-5. **Health movements** -- `kpi`/`debt`/`staleness` deltas since the last run:
-   obsolescence exposure, unsupported capabilities, the review queue by owner.
+5. **Health movements** -- `easkills trend` over the committed KPI snapshots names
+   what regressed since the last one (take today's with `kpi --as-of <date>
+   --snapshot` first and commit it with the minutes); `easkills diff --ref <commit of
+   the last board>` lists what changed in the approved model since then, by field.
+   Obsolescence exposure, unsupported capabilities, the review queue by owner.
+   For a roadmap item, `easkills diff --plateau <from> <to>` states what the target
+   state changes -- what enters, what leaves, and the gap that closes it.
 6. **Rationalization candidates** -- `debt` items of kind `rationalization-candidate`,
    `overlapping-applications` and `duplicate-service`. Each is a board item precisely
    because the tool cannot decide it: overlap is either portfolio drift or *bought
@@ -49,7 +58,7 @@ disp-onprem-legacy for 6 months or fund the migration" is an agenda item;
 
 ## The maturity table as a board artifact
 
-`python -m easkills maturity --as-of <date>` produces the one slide a board actually
+`easkills maturity --as-of <date>` produces the one slide a board actually
 acts on — provided you bring it whole. **Never reduce it to a single figure**, and
 never present a level without the items blocking the next one: a level is a
 description, the blockers are the agenda. Two dimensions moving in opposite directions

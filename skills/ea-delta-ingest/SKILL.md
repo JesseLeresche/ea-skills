@@ -1,6 +1,10 @@
 ---
 name: ea-delta-ingest
 description: Ingest new or changed source material and propose model updates as a diff against the approved model - continuous ingestion, not one-shot generation. Use when new interviews, CMDB exports or drift reports land in facts/sources, when the delta report shows unmodelled entities or unused facts, or when asked to "update the model from" new information.
+argument-hint: "[source-file]"
+allowed-tools:
+  - Bash(easkills *)
+  - Bash(python -m easkills *)
 ---
 
 # Delta ingestion
@@ -14,12 +18,19 @@ precisely so a re-run produces a reviewable diff.
 1. **Intake first.** New documents go through `ea-intake` like any source: chunks,
    facts with verbatim quotes, entity resolution against the *existing*
    `facts/entities.yaml` (this is where "the new WMS" gets recognised as `wms`
-   rather than becoming a twin), `validate-facts`, coverage.
+   rather than becoming a twin), `validate-facts`, coverage. A PDF, Word, PowerPoint or
+   Excel file is converted with `easkills intake-doc` first, never by hand.
+
+   **Check the open questions against the new material.** An answer often arrives
+   unannounced, in the next interview or export. When a new fact answers an open entry in
+   `facts/questions/`, close it: `status: answered`, the date, and `answeredBy` naming the
+   fact. A question answered and left open keeps appearing in `kpi` and in the
+   architecture description as an unknown the repository in fact knows.
 
 2. **Ask the tooling what is new:**
 
 ```bash
-python -m easkills delta --root <repo>
+easkills delta --root <repo>
 ```
 
 Two mechanical lists: entities with no model counterpart (candidate additions) and

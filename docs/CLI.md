@@ -1,8 +1,14 @@
 # CLI reference
 
 ```
-python -m easkills <command> [flags]
+python -m easkills <command> [flags]      # from a clone (or an editable install)
+easkills <command> [flags]                # with the Claude Code plugin enabled
 ```
+
+The two spellings are one command: `bin/easkills` runs the plugin's own copy of this
+package with the first Python 3.11+ it finds (`$EASKILLS_PYTHON`, `python3`, `python`), so
+the skills can call it from inside any architecture repository. Same arguments, same exit
+codes, same output.
 
 Every command is deterministic given the repository state (and, where relevant, an
 `--as-of` date). **Exit code 0** = gate passed; **1** = error-severity findings (or a
@@ -27,14 +33,16 @@ parser; `python -m easkills <command> --help` is the same information, per comma
 | Flag | What it does | Commands |
 |---|---|---|
 | `--root <path>` | Repository root (default: cwd) | all except `gen-schema`, `pin-oracle`, `oracle-info` |
-| `--zone approved\|staging` | Which zone to read; governance metadata is mandatory in `approved` | `validate`, `compile`, `render`, `impact`, `align`, `readiness`, `elements`, `relations` |
-| `--strict` | Warnings fail too (on `conformance`: any failed clause fails; on `align`: gaps fail; on `readiness`: any open checkpoint fails) | `validate`, `validate-facts`, `validate-gov`, `conformance`, `check`, `align`, `readiness`, `dora-register`, `ai-act-register` |
-| `--as-of YYYY-MM-DD` | Evaluate date-dependent checks against a fixed date, for reproducibility | `validate-gov`, `staleness`, `kpi`, `debt`, `conformance`, `correspondences`, `roadmap`, `context`, `check`, `impact`, `dora-register`, `ai-act-register`, `maturity`, `propose` (**required** there) |
-| `--json <file>` | Write the machine-readable report alongside the rendered one. On `chunk`, `decisions`, `elements` and `relations` it takes **no argument** and prints JSON to stdout instead | `validate`, `validate-facts`, `validate-gov`, `staleness`, `kpi`, `debt`, `conformance`, `correspondences`, `delta`, `roadmap`, `coverage`, `score`, `chunk`, `decisions`, `elements`, `relations`, `check`, `import`, `impact`, `intake-csv`, `align`, `readiness`, `dora-register`, `ai-act-register`, `maturity`, `propose` |
-| `--out <path>` | Output file (or directory, for `render`) instead of the default location | `compile`, `render`, `docs`, `context`, `import`, `intake-csv`, `dora-register`, `ai-act-register`, `propose` |
+| `--zone approved\|staging` | Which zone to read; governance metadata is mandatory in `approved` | `validate`, `compile`, `render`, `impact`, `align`, `readiness`, `rtm`, `exposure`, `query`, `export`, `elements`, `relations` |
+| `--strict` | Warnings fail too (on `conformance`: any failed clause fails; on `align`: gaps fail; on `readiness`: any open checkpoint fails) | `validate`, `validate-facts`, `validate-gov`, `conformance`, `check`, `align`, `readiness`, `dora-register`, `ai-act-register`, `gdpr-register`, `trend` (a regression since the previous snapshot fails) |
+| `--as-of YYYY-MM-DD` | Evaluate date-dependent checks against a fixed date, for reproducibility | `validate-gov`, `staleness`, `kpi`, `debt`, `conformance`, `correspondences`, `roadmap`, `context`, `check`, `impact`, `dora-register`, `ai-act-register`, `gdpr-register`, `maturity`, `propose` (**required** there) |
+| `--json <file>` | Write the machine-readable report alongside the rendered one. On `chunk`, `decisions`, `elements` and `relations` it takes **no argument** and prints JSON to stdout instead | `validate`, `validate-facts`, `validate-gov`, `staleness`, `kpi`, `debt`, `conformance`, `correspondences`, `delta`, `roadmap`, `coverage`, `score`, `chunk`, `check`, `import`, `impact`, `intake-csv`, `intake-doc`, `align`, `readiness`, `dora-register`, `ai-act-register`, `maturity`, `propose`, `rtm`, `glossary`, `exposure`, `gdpr-register`, `trend`, `diff`, `query`, `decisions`, `elements`, `relations` |
+| `--out <path>` | Output file (or directory, for `render`) instead of the default location; on `rtm` and `glossary` a `.csv` suffix writes CSV, anything else markdown | `compile`, `render`, `docs`, `context`, `import`, `intake-csv`, `intake-doc`, `dora-register`, `ai-act-register`, `gdpr-register`, `propose`, `rtm`, `glossary`, `export` (a directory) |
 | `--skip-validation` | Build from a model with validation errors (not recommended) | `compile`, `docs` |
 | `--scope <element-id>` | The element the command is about | `context`, `check`, `impact` |
 | `--repo <path>` | The *consuming* repository being checked (`--root` stays the EA repository) | `check` |
+| `--lang en\|pl` | Language of the generated document; terminal output and rule messages stay English. On `docs`, a non-English description is written beside the English one (`architecture-description.pl.md`) | `docs`, `dora-register`, `ai-act-register`, `gdpr-register` |
+| `--format <name>` | Output format: `markdown\|its-csv` on `dora-register`, `plantuml\|mermaid` on `export` (required there) | `dora-register`, `export` |
 | `--reference <name>` | The reference pack under `reference/` (repeatable on `align` and `propose --from align`, where the default is every pack present; required on `pin-reference`) | `align`, `pin-reference`, `propose` |
 
 `align` and `readiness` have **no `--as-of`**: nothing in either depends on a date, and a
@@ -57,7 +65,7 @@ a run that has real errors, or no warnings, prints the line it always did. The o
 | Command | Checks | Rules |
 |---|---|---|
 | `validate [--zone approved\|staging] [--strict] [--json]` | The model: schema, identifiers, references, provenance (quotes located in sources; fact references re-verified), governance metadata, ArchiMate 3.2 relationship matrix, structural cycles, motivation bindings, standards lifecycle, ISO 42010 loop, naming, smells. `staging` validates as an overlay on `approved`. | `ORACLE* SCHEMA* ID* REF* PROV* GOV* REL* MOT* STD* ISO* NAME* SMELL*` |
-| `validate-facts [--strict] [--json]` | The fact register: schema, duplicate ids/statements, quotes located in sources, entity references and alias uniqueness, uncited sources. | `FACT* ENT* SRC*` |
+| `validate-facts [--strict] [--json]` | The fact register: schema, duplicate ids/statements, quotes located in sources, entity references and alias uniqueness, uncited sources -- and the clarification questions in `facts/questions/`: quote located, answers pointing at real facts, real dates. | `FACT* ENT* SRC* QST*` |
 | `validate-gov [--strict] [--as-of] [--json]` | Standards base, decisions, dispensations (expiry is loud), compliance assessments, service catalog and demand ledger (SLA hygiene). | `SIB* DEC* DISP* COMP* SVC* REQ*` |
 
 Full catalogue with severities and rationale: [RULES.md](RULES.md).
@@ -69,8 +77,9 @@ Full catalogue with severities and rationale: [RULES.md](RULES.md).
 | `import --file <export>.xml [--out] [--ids names\|identifiers] [--json]` | ArchiMate Open Exchange XML → staging YAML proposals, written the way this repository authors models: elements per ArchiMate layer, relationships in `relations.yaml`, views in `views.yaml`. That split is what makes a slice promotable on its own — `--out` collapses it to one file, which cannot be. (Brownfield adoption.) Everything arrives `assumed` (claims, not evidence), owner/review metadata is lifted from exported properties, geometry is discarded, every rename/skip/mapping is in the report, and an existing file is never overwritten. The import does not judge the model — matrix-illegal content is left for `validate` to report. A native Archi file (`.archimate`, XML or the zipped variant) is **refused** with exit 1, not imported: in Archi use *File > Export > Model to Open Exchange File…* and import that. |
 | `compile [--zone] [--out] [--skip-validation]` | DSL → ArchiMate Open Exchange XML (`build/model.xml`), XSD-validated offline, byte-stable. Refuses a model with errors. |
 | `promote [--file <staging-file>]... [--dry-run]` | **The only write path into `approved/`.** Validates the *post-move* result by approved-zone standards — a staging file replaces the approved file of the same name, so the gate sees exactly what the move produces; on a clean gate moves the files, naming any approved concepts the replacement removes. Partial promotion supported. The git commit is the approval record. |
-| `render [--zone] [--out]` | Views → deterministic SVG (`docs/views/`), no external toolchain. |
-| `docs [--out] [--skip-validation]` | Renders views and generates the architecture description (ISO 42010 Clause 6 shape, TIME portfolio, capability support, open assumptions) from `approved/` only. Deterministic; commit the output — CI checks freshness. |
+| `render [--zone] [--out] [--heatmap PROPERTY]` | Views → deterministic SVG (`docs/views/`), no external toolchain. A name too long for its box wraps onto a second line, and only the second line is ever cut. `--heatmap` colours every box by one property (any element property, or `owner`, `layer`, `type`) instead of by layer, with a legend counting each value and the elements carrying none drawn dashed; a closed vocabulary keeps its schema order, so a value has the same colour in every view. Heatmaps are written beside the views as `<view>.heatmap-<property>.svg`, never over them. |
+| `export --format plantuml\|mermaid [--view ID] [--zone] [--out DIR]` | Views as diagram text for the tools architects already paste into. PlantUML uses the ArchiMate library in PlantUML's standard library (`!include <archimate/Archimate>`), one procedure per element and relationship type, checked against that library; Mermaid has no ArchiMate notation, so a view becomes a flowchart with the layer colours `render` uses and dashed Realization/Specialization. Byte-stable; layout is left to the receiving tool. One `--view` without `--out` prints to stdout; otherwise one file per view under `--out` (default `build/diagrams/`). |
+| `docs [--out] [--skip-validation] [--lang]` | Renders views and generates the architecture description (ISO 42010 Clause 6 shape, TIME portfolio, capability support, open assumptions) from `approved/` only. Deterministic; commit the output — CI checks freshness. |
 
 `--zone staging` means the same overlay everywhere (`validate`, `compile`, `render`): a
 delta is read against the approved model it proposes to change.
@@ -80,14 +89,24 @@ delta is read against the approved model it proposes to change.
 | Command | Does |
 |---|---|
 | `intake-csv --file <export>.csv [--out] [--overwrite] [--json]` | Converts a tabular export (CSV, and therefore Excel) into a citable source document in `facts/sources/`: a markdown table whose header records the original file's SHA-256, encoding and delimiter, so a verified quote stays traceable to the bytes it came from. Delimiter is chosen by consistent column count, not frequency; cells keep their pipes (escaped) and lose their line breaks (reported); ragged rows are padded and named. Nothing is interpreted — no column is mapped to a model field. |
+| `intake-doc --file <doc> [--out] [--overwrite] [--json]` | The same for a PDF, Word document, PowerPoint deck or Excel workbook: markdown in `facts/sources/` whose header records the original's SHA-256 and the library and version that read it. Body order is kept (a table stays between the paragraphs about it), headings stay headings, every sheet and every slide is converted, speaker notes included. What cannot be read is said, not skipped: a PDF page with no text layer (no OCR is done) and a formula with no cached value are named in the header. The libraries are an optional extras group (`pip install -r requirements-intake.txt`); without them the command refuses and names the install line. Nothing is interpreted. |
 | `chunk [--file <source>] [--max-chars N] [--json]` | Splits sources into deterministic extraction chunks with exact line ranges and stable ids. |
 | `coverage [--min-coverage PCT] [--json]` | Which substantive source statements no fact cites, with line numbers — candidate clarification questions. Advisory unless the threshold gate is used. |
+
+## The analyst's tables
+
+| Command | Does |
+|---|---|
+| `rtm [--zone] [--json] [--out file.csv\|file.md]` | Requirement traceability, derived: for every `Requirement`, `Constraint`, `Principle` and `Goal`, what it binds (`appliesTo`), what realizes it, the facts and sources evidencing it, and the decisions and compliance assessments about it or what it binds. Each row carries the flags `unbound`, `unrealized`, `assumed` where they hold -- facts about the row, not findings. |
+| `glossary [--json] [--out file.csv\|file.md]` | The entity table as a glossary: each term with its aliases and documentation, the facts that mention it, and the model elements that answer to it -- by name or alias first, by citing one of its facts only when no element carries the name. |
+
+Neither is a gate and both exit 0. Edit the records they are derived from, never the table.
 
 ## Is it done?
 
 | Command | Does |
 |---|---|
-| `readiness [--zone] [--strict] [--json]` | The per-layer definition of done: one checkpoint list per ArchiMate layer (Strategy, Business, Application, Technology, Motivation), each finding **naming the elements** that fail it — unsupported *and unexamined* capabilities, processes attached to neither a capability nor a service, components with no `lifecycle`/`timeDisposition`, services with no consumer, infrastructure serving nothing, obligations binding nothing, and layers the fact register covers while the model does not. **Nothing here is an error**: an unfinished layer is not a wrong model, and an empty layer is shown rather than flagged. `--strict` is how a repository that claims completeness gates on it. Rules: `RDY*`. |
+| `readiness [--zone] [--strict] [--json]` | The per-layer definition of done: one checkpoint list per ArchiMate layer (Strategy, Business, Application, Technology, Motivation), each finding **naming the elements** that fail it — unsupported *and unexamined* capabilities, value streams nothing enables, goals and outcomes nothing realizes, processes attached to neither a capability nor a service, components with no `lifecycle`/`timeDisposition`, services with no consumer, infrastructure serving nothing, obligations binding nothing, and layers the fact register covers while the model does not. **Nothing here is an error**: an unfinished layer is not a wrong model, and an empty layer is shown rather than flagged. `--strict` is how a repository that claims completeness gates on it. Rules: `RDY*`. |
 
 ## Reference alignment
 
@@ -101,7 +120,10 @@ delta is read against the approved model it proposes to change.
 | Command | Does |
 |---|---|
 | `staleness [--as-of] [--json]` | Review-age per element, with per-element consumer **demand** and a `neverRequested` count; the queue orders by demand. |
-| `kpi [--as-of] [--json]` | One screen: size, evidence share, governance health, TIME portfolio and obsolescence exposure, capability support, ISO loop state, and the service line (offerings, dispositions, SLA breaches, average fulfilment). |
+| `kpi [--as-of] [--json] [--snapshot]` | One screen: size, evidence share, governance health, TIME portfolio and obsolescence exposure, capability support, ISO loop state, and the service line (offerings, dispositions, SLA breaches, average fulfilment). `--snapshot` also writes the same JSON to `governance-log/metrics/<as-of>.json` (schema `metrics.schema.json`) as a record to commit; it **requires `--as-of`**, because the file name is the date. Re-running on the same date with an unchanged model is a no-op; with a changed model it is refused — a past date's record is not rewritten. |
+| `trend [--last N] [--strict] [--json]` | The KPI series from the committed snapshots: one row per metric, one column per date, and what **improved** and **regressed** since the previous snapshot. Only metrics with a better direction can regress — growth, open requests and open dispensations are neutral, since calling a rise in either a regression would reward deleting records. Reads only what was committed and never recomputes a past value. An unreadable snapshot, or one whose name disagrees with its `asOf`, is named and exits 1; `--strict` also exits 1 on any regression. |
+| `diff (--plateau FROM TO \| --ref GIT-REF) [--json]` | What changes. `--plateau` lists what enters, leaves and stays between two plateaus — by the same Aggregation/Composition membership `roadmap` reads — and the gaps associated with either. `--ref` compares the approved zone with the approved zone at a commit, read through `git ls-tree` and `git show`: elements, relationships and views added, removed and changed, each change named by field (`properties.lifecycle`, `owner`, `appliesTo`); moving a concept between files is not a change. Never checks anything out or writes the index. Exit 1 on an unknown id or ref, or outside a git repository. |
+| `query [--type T]... [--where COND]... [--from ID [--hops N] [--rel TYPE]... [--direction out\|in\|both]] [--show KEY]... [--zone] [--json]` | Find elements without writing a script. `--where` takes `key=value`, `key!=value`, `key~token` (membership in a space-joined value: `regulatoryScope~dora` matches `dora gdpr`) and `key=` (absent); a key is a property or one of `id`, `type`, `name`, `owner`, `lastReviewed`, `layer`, `assumed`. `--from` walks relationships — and `appliesTo`, the motivation binding, by name — breadth-first up to `--hops`, and each result says the hop and the link it came by. Read-only; exit 1 on a question it cannot read (an unknown type, id or relationship). |
 | `debt [--as-of] [--json]` | EA-debt register from deterministic smell queries: isolated elements, hubs, unsupported capabilities, duplicate names, stale content, dead-standard references — plus the three overlap queries below. |
 | `conformance [--strict] [--as-of] [--json]` | ISO/IEC/IEEE 42010:2022 Clause 6 checklist — `pass`/`fail` where checkable, explicit `gap` where not (never silent conformance). `--strict` exits 1 on any fail. |
 | `correspondences [--as-of] [--json]` | ISO 42010 §6.9: every relation that crosses out of the model — into the governance log, into the fact register — with the rule it is held to and the code that enforces it. Derived from the records that already declare them, so the table cannot drift from the records. |
@@ -235,7 +257,7 @@ something the rest of the tooling also agrees improved.
 
 | Command | Does |
 |---|---|
-| `propose --from align\|readiness\|overlap\|time --as-of <date> [--reference NAME] [--out] [--json] [--dry-run]` | Turns one report's findings into **staging skeletons**: a reference gap becomes a `Requirement` (a `Constraint` for a `kind: control` node), an open readiness checkpoint (warning severity — what `readiness --strict` gates on) becomes a `Constraint` bound to its element via `appliesTo`, a rationalization candidate becomes a `WorkPackage` *naming* its realizers, and a TIME disposition no plateau carries (`PLAT005`) becomes a `WorkPackage` for scheduling it — ordered by blast radius, then id. Writes `model/staging/proposed-*.yaml`. |
+| `propose --from align\|readiness\|overlap\|time\|coverage\|threats\|ai-act --as-of <date> [--reference NAME] [--out] [--json] [--dry-run]` | Turns one report's findings into **staging skeletons**: a reference gap becomes a `Requirement` (a `Constraint` for a `kind: control` node), an open readiness checkpoint (warning severity — what `readiness --strict` gates on) becomes a `Constraint` bound to its element via `appliesTo`, a rationalization candidate becomes a `WorkPackage` *naming* its realizers, and a TIME disposition no plateau carries (`PLAT005`) becomes a `WorkPackage` for scheduling it — ordered by blast radius, then id. Writes `model/staging/proposed-*.yaml`. `--from coverage` is the one source that writes outside the model: every source statement no fact cites becomes a clarification-question skeleton in `facts/questions/proposed-questions.yaml`, pointing at the file, the lines and the statement's own text (so it validates under `QST002`), with the question itself left to a human. `--from threats` proposes one `Assessment` per relationship that crosses a trust boundary (two different `trustZone` values), bound to both ends, with STRIDE's six categories in the placeholder; an assessment does not govern, so `SEC002` keeps asking until a requirement or standard does. `--from ai-act` proposes a fundamental-rights impact assessment skeleton (Art. 27) for each high-risk system the organisation deploys with no `Assessment` bound to it, asking first whether Art. 27 reaches the organisation at all. |
 
 Everything it writes is `assumed: true` with a rationale naming the finding and the date
 it came from, and **every documentation field opens with `PROPOSED --`** — a loud,
@@ -282,8 +304,9 @@ same repository produce a different file tomorrow.
 
 | Command | Does |
 |---|---|
-| `dora-register [--as-of] [--out] [--json] [--strict]` | Generates the DORA **Register of Information** from the approved model: ICT third-party providers, contractual arrangements, the services in scope with their criticality, the business functions depending on them, and the open dispensations covering any of it. Scope is `properties.regulatoryScope: dora` on the element — declared, never inferred from a type. Rules: `REG*`. |
-| `ai-act-register [--as-of] [--out] [--json] [--strict]` | Generates the EU AI Act **system inventory** from the approved model: the AI systems in scope with their risk class (`aiRiskClass`), the operator role held for each (`aiRole`), the human-oversight arrangement (`aiOversight`), third-party AI providers, the business functions the systems serve, and the open dispensations covering any of it. Scope is `properties.regulatoryScope: ai-act` — and an element can be in both registers at once (`regulatoryScope: ai-act dora`, a closed enum of alphabetical combinations; neither register drops it). Rules: `AIR*`. |
+| `dora-register [--as-of] [--out] [--json] [--strict] [--format markdown\|its-csv] [--lang]` | Generates the DORA **Register of Information** from the approved model: ICT third-party providers, contractual arrangements, the services in scope with their criticality, the business functions depending on them, and the open dispensations covering any of it. Scope is `properties.regulatoryScope: dora` on the element — declared, never inferred from a type. `--format its-csv --out <dir>` writes one CSV per ITS template the model can feed (B_02.01, B_02.02, B_05.01, B_06.01), every template column present and headed by its code and name, only the fields the model carries filled (`providerLei` fills the provider-code columns), and a `README.md` naming every column left empty and every template not exported. Values stay in this repository's vocabulary, not the ITS code lists; the column codes were taken from a rendering of Annex I because EUR-Lex refused automated retrieval, and the README says to check them against the Official Journal. Rules: `REG*`. |
+| `ai-act-register [--as-of] [--out] [--json] [--strict] [--lang]` | Generates the EU AI Act **system inventory** from the approved model: the AI systems in scope with their risk class (`aiRiskClass`), the operator role held for each (`aiRole`), the human-oversight arrangement (`aiOversight`), third-party AI providers, the business functions the systems serve, and the open dispensations covering any of it. Scope is `properties.regulatoryScope: ai-act` — and an element can be in both registers at once (`regulatoryScope: ai-act dora`, a closed enum of alphabetical combinations; neither register drops it). Rules: `AIR*`. |
+| `gdpr-register [--as-of] [--out] [--json] [--strict] [--lang]` | Generates the GDPR **Art. 30 record of processing activities** from the approved model: per processing activity the purpose, lawful basis (Art. 6, a closed vocabulary), data subjects, personal data, recipients, transfers outside the EEA and retention, from `gdpr*` properties; the security measures (Art. 30(1)(g)) derived from the obligations binding each element and the standards it claims; special-category processing listed with the Art. 9(2) condition named as a gap on every row, because the model never carries it; and the open dispensations. Scope is `regulatoryScope` including `gdpr`. Rules: `GDR*`. |
 
 **Generators, not attestations.** Each document's structure follows what its regulation
 asks about — the ESAs' implementing technical standards for DORA, the Act's risk classes,
@@ -308,11 +331,28 @@ Control-framework gaps are not part of this command. A control framework is a ta
 so it rides the reference mechanism: a pack with `kind: control` nodes, and an unmapped
 control is `ALN004`. See [`ea-regulatory`](../skills/ea-regulatory/SKILL.md).
 
+## Security
+
+| Command | Does |
+|---|---|
+| `exposure [--zone] [--depth N] [--json]` | From every element with `exposure: public`, what an attacker holding it could reach: each element with its hop count and the relationship it was reached by, then the sensitive data (`dataClassification` confidential or restricted), the elements rated high, the personal data, the trust boundaries crossed and the **ungoverned** elements on the way. Reach follows a declared table (`security.REACH`), not change impact: a consumer reaches the service it uses, an accessor its data, a flow its destination, wholes and parts each other; `Association` is never walked. A report, never a gate. |
+
+The security vocabulary (`dataClassification`, `personalData`, `secConfidentiality`,
+`secIntegrity`, `secAvailability`, `exposure`, `trustZone`) is read by `validate`
+(`SEC001`–`SEC003`), by `align` (`ALN009`) and by `propose --from threats`. Every rule is
+silent until a repository uses the property it reads.
+
 ## Consuming repositories
 
 | Command | Does |
 |---|---|
-| `check --scope <element-id> [--repo <path>] [--strict] [--as-of] [--json]` | Runs in a *product* repository's CI: reads its dependency manifests (`package.json`, `pom.xml`, `requirements.txt`) and reports them against the standards its EA element claims — retired without a waiver is an error, deprecated warns, a covering dispensation is reported with its expiry, and a governed dependency the model does not record comes back as drift. Detection is declared by each SIB entry (`detect:`), never inferred, and the consuming repository maintains no integration manifest: `--scope` is the whole convention. |
+| `check --scope <element-id> [--repo <path>] [--sbom <file>]... [--strict] [--as-of] [--json]` | Runs in a *product* repository's CI: reads its dependency manifests (`package.json`, `pom.xml`, `requirements.txt`, `pyproject.toml` — PEP 621 and Poetry) and any SBOM passed with `--sbom` (CycloneDX or SPDX JSON; a `detect:` rule names the package by URL without its version) and reports them against the standards its EA element claims — retired without a waiver is an error, deprecated warns, a covering dispensation is reported with its expiry, and a governed dependency the model does not record comes back as drift. Detection is declared by each SIB entry (`detect:`), never inferred, and the consuming repository maintains no integration manifest: `--scope` is the whole convention. |
+
+## Serving the model
+
+| Command | Does |
+|---|---|
+| `serve [--root]` | The approved model as a **read-only MCP server** over stdio (standard library only; MCP handshake revisions 2024-11-05 to 2025-11-25). Its tools — `validate`, `kpi`, `trend`, `staleness`, `debt`, `roadmap`, `readiness`, `impact`, `exposure`, `query`, `diff_plateaus`, `diff_since`, `context`, `rtm`, `glossary` and the three registers — each a report function, each marked read-only; the architecture description and a context pack per application component and capability as resources, plus a template for any element. Nothing that writes is reachable, staging is never read, and every call reads the files again. The repository is the nearest directory at or above `--root` (default `$CLAUDE_PROJECT_DIR`, else the working directory) holding `ea.config.yaml`. The Claude Code plugin registers it as `easkills`; any MCP host can run `easkills serve`. Exits 0 when stdin closes. |
 
 ## Evaluation
 
@@ -324,7 +364,7 @@ control is `ALN004`. See [`ea-regulatory`](../skills/ea-regulatory/SKILL.md).
 
 | Command | Does |
 |---|---|
-| `gen-schema` | Regenerates every JSON Schema under `schema/` — all twelve, from one registry, each freshness-tested against its committed copy (the model schema derives from the oracle, so a stale one would accept what the validator rejects). |
+| `gen-schema` | Regenerates every JSON Schema under `schema/` — all fourteen, from one registry, each freshness-tested against its committed copy (the model schema derives from the oracle, so a stale one would accept what the validator rejects). |
 | `oracle-info` | Oracle version, concept coverage, checksum pin status. |
 | `pin-oracle` | Rewrites the SHA-256 pins — only for deliberate, reviewed oracle upgrades; never to silence `ORACLE001`. |
 
@@ -362,5 +402,5 @@ the one-way link (`DEC007`) and re-running `supersede` repairs it.
 | Code | Meaning |
 |---|---|
 | 0 | Gate passed (warnings allowed unless `--strict`). |
-| 1 | Error-severity findings; a threshold gate breached (`--min-coverage`, `--min-f1`, `--strict` on `conformance`); a refusal (`compile`/`docs` on an invalid model, `promote` blocked); an unknown scope/path. |
+| 1 | Error-severity findings; a threshold gate breached (`--min-coverage`, `--min-f1`, `--strict` on `conformance`); a refusal (`compile`/`docs` on an invalid model, `promote` blocked, `kpi --snapshot` over a different record of the same date); an unknown scope/path/ref; an unreadable KPI snapshot, or a regression under `trend --strict`. |
 | 2 | CLI usage error (argparse). |
