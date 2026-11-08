@@ -62,7 +62,7 @@ def read(root: Path, record_id: str) -> str:
 
 
 def tree(root: Path) -> dict[str, bytes]:
-    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
 
 
 def decisions_main(capsys, argv: list[str], root: Path | None = None) -> tuple[int, str, str]:
