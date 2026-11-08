@@ -163,7 +163,7 @@ def run(capsys, argv: list[str], root: Path | None = None) -> tuple[int, str, st
 
 
 def tree(root: Path) -> dict[str, bytes]:
-    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
 
 
 def changed_lines(before: str, after: str) -> list[str]:
@@ -734,7 +734,8 @@ def test_replace_file_swaps_content_and_preserves_the_mode(tmp_path):
     target.chmod(0o640)
     records.replace_file(target, "new\r\n")
     assert target.read_bytes() == b"new\r\n"
-    assert stat.S_IMODE(target.stat().st_mode) == 0o640
+    if os.name != "nt":  # Windows has no POSIX mode bits to preserve
+        assert stat.S_IMODE(target.stat().st_mode) == 0o640
     assert [p.name for p in tmp_path.iterdir()] == ["n.yaml"]
 
 

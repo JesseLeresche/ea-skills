@@ -1,18 +1,27 @@
 ---
 name: ea-docs
 description: Generate and review the architecture description (ISO 42010 structure) and audience outputs from the approved model. Use when asked for architecture documentation, an architecture description, a portfolio report, TIME quadrants, or a stakeholder-facing summary of the model. Reads only the approved zone.
+allowed-tools:
+  - Bash(easkills *)
+  - Bash(python -m easkills *)
 ---
 
 # The architecture description
 
 ```bash
-python -m easkills docs --root <repo>
+easkills docs --root <repo>
+easkills docs --root <repo> --lang pl   # also docs/architecture-description.pl.md
 ```
 
 One command produces `docs/architecture-description.md` plus one SVG per view in
 `docs/views/`, generated **only from `model/approved/`** -- staging content is a
 proposal and never appears in documentation. The command refuses a model with
 validation errors; do not override that to hit a deadline.
+
+`--lang pl` writes a Polish description beside the English one; commit both and
+regenerate both with every model change. Only the generator's own wording is translated -- element
+names, documentation and decision rationale stay in the language their authors wrote
+them in, which is a fact about the model rather than a defect of the translation.
 
 ## What the generator guarantees (so you do not re-do it)
 
@@ -22,7 +31,8 @@ validation errors; do not override that to hit a deadline.
   properties -- nothing is re-judged at documentation time.
 * Capability support table, including capabilities *nothing realizes*.
 * Every declared assumption surfaced as an open question -- burying assumptions is the
-  failure mode this section exists to prevent.
+  failure mode this section exists to prevent -- and every open clarification question
+  from `facts/questions/`, with the text that raised it and who was asked.
 * Decisions with their rationale (§6.10) and correspondences with the rule each one is
   held to (§6.9), derived from the governance log and the register -- never authored a
   second time in the description, and never truncated. A violated correspondence is
@@ -48,6 +58,14 @@ a one-pager for the auditor), write it as a *separate* document next to the gene
 one (e.g. `docs/onepager-<audience>.md`), sourced from the description and the model
 -- and say which model state ("as of" date) it reflects. Do not fork the architecture
 description itself per audience; one description, many extracts.
+
+Two extracts are derived rather than written, and analysts ask for them by name:
+`easkills rtm --out rtm.csv` (every requirement, constraint, principle and goal with
+what it binds, what realizes it, its evidence and the decisions about it) and
+`easkills glossary --out glossary.md` (the entity table with aliases, the facts behind
+each term and the elements that answer to it). Hand them over as generated; a row that
+looks wrong is a record to fix, and the flags on a traceability row (`unbound`,
+`unrealized`, `assumed`) are the review agenda.
 
 ## Reporting back
 

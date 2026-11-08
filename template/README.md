@@ -8,6 +8,7 @@ else, with the import.
 
 ```bash
 python -m easkills intake-csv --root . --file inventory.csv       # spreadsheet -> citable source
+python -m easkills intake-doc --root . --file policy.pdf          # PDF/Word/PowerPoint/Excel -> citable source
 python -m easkills import     --root . --file export.xml          # Archi/Open Exchange -> staging
 ```
 
@@ -17,6 +18,7 @@ python -m easkills import     --root . --file export.xml          # Archi/Open E
 python -m easkills chunk          --root .            # split sources for extraction
 python -m easkills validate-facts --root .            # the fact register gate
 python -m easkills coverage       --root .            # what the facts do not cover yet
+python -m easkills propose --root . --from coverage --as-of <date>   # a question skeleton per uncited statement
 python -m easkills validate --root . --zone staging   # proposals, overlaid on approved
 python -m easkills promote  --root . --dry-run        # the promotion gate, no move
 python -m easkills promote  --root .                  # staging -> approved (on human sign-off)
@@ -31,6 +33,8 @@ python -m easkills docs     --root .                  # -> docs/ (AD + SVG views
 python -m easkills render   --root .                  # views only
 python -m easkills validate-gov --root .              # standards + governance log gate
 python -m easkills decisions list --root .             # decision register (also new, show, set-status, supersede)
+python -m easkills rtm      --root . --out rtm.csv    # requirement traceability, for a spreadsheet
+python -m easkills glossary --root . --out glossary.md   # the entity table as a glossary
 ```
 
 **Operate**
@@ -48,6 +52,15 @@ python -m easkills relations list --root . --from <id>   # relationships out of 
 python -m easkills elements new --root . --type Node --name "Edge" --assumed --rationale "to confirm"   # stage a change (also elements set/retire/remove, relations new/remove)
 python -m easkills impact  --root . --scope <id>      # blast radius + Phase H count
 python -m easkills context --root . --scope <id>      # agent context pack (AD-09)
+python -m easkills exposure --root .                  # reach from every public element
+python -m easkills propose --root . --from threats --as-of <date>   # assessments for trust-boundary crossings
+python -m easkills kpi --root . --as-of <date> --snapshot   # commit governance-log/metrics/<date>.json
+python -m easkills trend   --root .                         # the snapshots, and what regressed
+python -m easkills diff    --root . --plateau <from> <to>   # what the plan changes (or --ref <commit>)
+python -m easkills query   --root . --where regulatoryScope~dora --show provider
+python -m easkills export  --root . --format mermaid --out docs/diagrams/   # or plantuml
+python -m easkills render  --root . --heatmap lifecycle     # colour the views by a property
+python -m easkills serve   --root .                         # read-only MCP server (the plugin registers it)
 ```
 
 **Is it done?**
@@ -94,6 +107,16 @@ python -m easkills ai-act-register --root . --as-of <date>
 python -m easkills ai-act-register --root . --as-of <date> --out docs/ai-act-register.md
 ```
 
+**If you process personal data** — tag processing activities with `gdpr` in
+`regulatoryScope` plus `personalData` and the `gdpr*` properties, then:
+
+```bash
+python -m easkills gdpr-register --root . --as-of <date> --out docs/ropa.md          # Art. 30 record
+python -m easkills dora-register --root . --as-of <date> --format its-csv --out build/dora-its/
+```
+
+Add `--lang pl` to any register, or to `docs`, for the Polish document.
+
 Generators, not attestations: read each document's last section first, and remember
 that the legal judgement belongs to whoever signs the filing. Untagged repositories get
 no document, which is the right answer when the regulation does not apply to you.
@@ -105,6 +128,7 @@ no document, which is the right answer when the regulation does not apply to you
 | `facts/sources/` | Raw input, unedited: interview notes, exports, documents. Provenance quotes must be findable here verbatim. |
 | `facts/register/` | The fact register produced by intake: atomic statements, each with a mechanically verified quote. |
 | `facts/entities.yaml` | Canonical names and aliases for the things the sources mention. |
+| `facts/questions/` | Clarification questions the sources raised: each points at the text that raised it and, once answered, at the fact the answer produced. |
 | `model/staging/` | Machine-proposed concepts awaiting human approval. Ownership metadata is advisory here. |
 | `model/approved/` | Human-signed model. Ownership and review dates are mandatory. Everything downstream reads only from here. |
 | `landscape/` | Architecture landscape partitioned by scope: `strategic/`, `segments/`, `capabilities/`. Baseline, transition and target states are modelled as ArchiMate plateaus inside the model, not as copies of it. |
@@ -115,6 +139,7 @@ no document, which is the right answer when the regulation does not apply to you
 | `requirements/` | Architecture requirements. |
 | `governance-log/decisions/` | Architecture decision records (MADR). |
 | `governance-log/compliance/` | Compliance assessments, recorded with TOGAF's six conformance levels rather than pass/fail. |
+| `governance-log/metrics/` | KPI snapshots (`kpi --snapshot --as-of <date>`), one JSON file per date, committed as records; `trend` reads them. |
 | `governance-log/dispensations/` | Time-bounded waivers. **An expiry date is mandatory** -- a dispensation without one is not governance. |
 | `docs/` | Generated architecture description and audience-facing outputs. |
 | `build/` | Compiled artifacts. Reproducible; not committed. |

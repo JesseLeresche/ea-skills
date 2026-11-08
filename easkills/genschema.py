@@ -31,6 +31,12 @@ REQUEST_SCHEMA_PATH = SCHEMA_DIR / "request.schema.json"
 REFERENCE_SCHEMA_PATH = SCHEMA_DIR / "reference.schema.json"
 REFERENCE_MAPPINGS_SCHEMA_PATH = SCHEMA_DIR / "reference-mappings.schema.json"
 CONFIG_SCHEMA_PATH = SCHEMA_DIR / "ea-config.schema.json"
+QUESTION_SCHEMA_PATH = SCHEMA_DIR / "question.schema.json"
+METRICS_SCHEMA_PATH = SCHEMA_DIR / "metrics.schema.json"
+
+# A clarification question is open until a fact answers it or somebody withdraws it with
+# a reason. Closed, because `kpi` and the architecture description count by status.
+QUESTION_STATUSES = ("open", "answered", "withdrawn")
 
 STANDARD_TYPES = ["legal", "industry", "organisation"]
 STANDARD_LIFECYCLES = ["proposed", "trial", "active", "deprecated", "retired"]
@@ -49,8 +55,9 @@ COMPLIANCE_VERDICTS = [
 # `properties.timeDisposition` to it, docgen groups by it, kpi counts it.
 TIME_DISPOSITIONS = ("Invest", "Migrate", "Tolerate", "Eliminate")
 
-# Dependency manifests `ea-check` reads in a consuming repository (AD-09).
-MANIFEST_KINDS = ("package.json", "pom.xml", "requirements.txt")
+# Dependency manifests `ea-check` reads in a consuming repository (AD-09): the files it
+# discovers, plus `sbom` for a CycloneDX or SPDX document passed with `--sbom`.
+MANIFEST_KINDS = ("package.json", "pom.xml", "requirements.txt", "pyproject.toml", "sbom")
 
 # What a reference-taxonomy node can be, and what a mapping may say about one. Closed
 # vocabularies, for the reason `timeDisposition` is one: `align` reasons per kind, so a
@@ -62,8 +69,20 @@ REFERENCE_MAPPING_STATUSES = ("covered", "partial", "out-of-scope")
 # the reason above, and one more: the failure mode of a *regulatory* register is
 # under-inclusion. `regulatoryScope: DORA` as free text would drop the element out of the
 # register silently, and nothing downstream would ever say so.
-REGULATORY_SCOPES = ("dora", "ai-act")
+REGULATORY_SCOPES = ("dora", "ai-act", "gdpr")
 CRITICALITIES = ("critical", "important", "standard")
+
+# Security architecture, in the existing homes (Phase 8.3, D6). ArchiMate has no security
+# layer and this repository adds none; what a security architect needs is a *vocabulary*
+# the rules can read. Every key is prefixed or specific -- the `criticality` lesson: a
+# generic word closed into an enum breaks every repository already using it for something
+# else -- and every rule that reads one stays silent until a repository uses it.
+DATA_CLASSIFICATIONS = ("public", "internal", "confidential", "restricted")
+PERSONAL_DATA = ("none", "personal", "special-category")
+# FIPS 199 impact levels: the scale the NIST SP 800-53 baselines are selected by.
+SECURITY_LEVELS = ("low", "moderate", "high")
+SECURITY_RATING_KEYS = ("secConfidentiality", "secIntegrity", "secAvailability")
+EXPOSURES = ("internal", "partner", "public")
 
 # The EU AI Act vocabularies `ai-act-register` reads. Risk classes follow the Act's own
 # structure (Art. 5 prohibited practices, Art. 6 high-risk, Art. 50 transparency-risk,
@@ -77,7 +96,31 @@ AI_ROLES = (
     "distributor",
     "product-manufacturer",
     "authorised-representative",
+    # The provider of a general-purpose AI model (Chapter V) that this system is built on --
+    # a different set of obligations from the system's own, and the one an inventory most
+    # often forgets to say the organisation holds.
+    "gpai-provider",
 )
+
+# GDPR Art. 6(1)(a)-(f), in the Article's order. Closed, because `gdpr-register` prints
+# each with its paragraph reference and a free-text basis would read as recorded and say
+# nothing a supervisor can check.
+GDPR_LAWFUL_BASES = (
+    "consent",
+    "contract",
+    "legal-obligation",
+    "vital-interests",
+    "public-task",
+    "legitimate-interests",
+)
+GDPR_TEXT_PROPERTIES = {
+    "gdprPurpose": "The purposes of the processing (Art. 30(1)(b)).",
+    "gdprDataSubjects": "The categories of data subjects (Art. 30(1)(c)).",
+    "gdprDataCategories": "The categories of personal data, beyond `personalData` (Art. 30(1)(c)).",
+    "gdprRecipients": "The categories of recipients the data are disclosed to (Art. 30(1)(d)).",
+    "gdprTransfer": "Transfers to a third country or international organisation, with safeguards; 'none' when there are none (Art. 30(1)(e)).",
+    "gdprRetention": "The envisaged time limits for erasure (Art. 30(1)(f)).",
+}
 
 
 def regulatory_scope_values() -> tuple[str, ...]:
@@ -256,6 +299,69 @@ def build_schema() -> dict[str, Any]:
                         "a role, a committee, a named procedure. Required on high-risk "
                         "elements (AIR002); the register lists it, it never audits it."
                     ),
+                },
+                "dataClassification": {
+                    "enum": list(DATA_CLASSIFICATIONS),
+                    "description": (
+                        "Information classification of what this element holds or is. Read by "
+                        "SEC001 (on the element and on the data objects it accesses) and by "
+                        "'exposure'."
+                    ),
+                },
+                "personalData": {
+                    "enum": list(PERSONAL_DATA),
+                    "description": (
+                        "Whether the element holds personal data, and of which GDPR category. "
+                        "SEC003 asks for the GDPR scope where it does."
+                    ),
+                },
+                **{
+                    key: {
+                        "enum": list(SECURITY_LEVELS),
+                        "description": (
+                            f"FIPS 199 impact level for {key.removeprefix('sec').lower()}. "
+                            "'high' asks a control framework to anchor the element (ALN009) "
+                            "and is named in the 'exposure' report."
+                        ),
+                    }
+                    for key in SECURITY_RATING_KEYS
+                },
+                "exposure": {
+                    "enum": list(EXPOSURES),
+                    "description": (
+                        "Who can reach this element: only the organisation, named partners, or "
+                        "the public internet. 'public' is where SEC001 and 'exposure' start."
+                    ),
+                },
+                "trustZone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": (
+                        "The trust zone the element runs in -- a label of your own (dmz, "
+                        "internal, partner-net). Rules compare zones for equality only: a "
+                        "relationship between two zones is a trust boundary (SEC002, "
+                        "'propose --from threats')."
+                    ),
+                },
+                "providerLei": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9]{18}[0-9]{2}$",
+                    "description": (
+                        "The Legal Entity Identifier of the ICT third-party provider (ISO 17442: "
+                        "eighteen characters and two check digits). Fills the provider code "
+                        "columns of the DORA ITS export (B_05.01.0010, B_02.02.0030)."
+                    ),
+                },
+                "gdprLawfulBasis": {
+                    "enum": list(GDPR_LAWFUL_BASES),
+                    "description": (
+                        "The Art. 6(1) lawful basis. Read by 'gdpr-register'; GDR002 asks for "
+                        "it on special-category data."
+                    ),
+                },
+                **{
+                    key: {"type": "string", "minLength": 1, "description": f"{text} Read by 'gdpr-register'."}
+                    for key, text in GDPR_TEXT_PROPERTIES.items()
                 },
             },
             "additionalProperties": {"type": ["string", "number", "boolean", "null"]},
@@ -542,6 +648,159 @@ def build_entities_schema() -> dict[str, Any]:
     }
 
 
+def build_question_schema() -> dict[str, Any]:
+    """Schema for facts/questions/*.yaml -- clarification questions as records.
+
+    `ea-intake` has always called questions "a first-class output", and they had nowhere
+    to live but a paragraph in a report. A question here points at the exact source text
+    that raised it (located mechanically, like a fact's quote), names who should answer,
+    and is closed by pointing at the fact the answer produced -- so "we asked" becomes as
+    checkable as "we were told".
+    """
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:ea-skills:schema:question",
+        "title": "EA Skills clarification-question file",
+        "description": (
+            "Questions a source raised and the sources could not answer. Each points at the "
+            "text that raised it and, once answered, at the fact the answer produced."
+        ),
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "questions": {"type": "array", "items": {"$ref": "#/$defs/question"}},
+        },
+        "$defs": {
+            "slug": _slug_def(),
+            "question": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["id", "question", "source", "status", "raised"],
+                "properties": {
+                    "id": {"$ref": "#/$defs/slug"},
+                    "question": {
+                        "type": "string",
+                        "minLength": 8,
+                        "description": "What a stakeholder is asked, phrased so they can answer it.",
+                    },
+                    "source": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["file", "quote"],
+                        "properties": {
+                            "file": {"type": "string", "minLength": 1},
+                            "quote": {
+                                "type": "string",
+                                "minLength": 8,
+                                "description": "The text that raised the question; located mechanically (QST002).",
+                            },
+                            "lines": {"type": "string", "pattern": "^[0-9]+(-[0-9]+)?$"},
+                        },
+                    },
+                    "addressedTo": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Who should answer: a role, a team, a named owner.",
+                    },
+                    "status": {"enum": list(QUESTION_STATUSES)},
+                    "raised": {"type": "string", "pattern": DATE_PATTERN},
+                    "answered": {"type": "string", "pattern": DATE_PATTERN},
+                    "answeredBy": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {"$ref": "#/$defs/slug"},
+                        "description": "Ids of the facts the answer produced (QST003).",
+                    },
+                    "notes": {"type": "string"},
+                },
+            },
+        },
+    }
+
+
+def build_metrics_schema() -> dict[str, Any]:
+    """Schema for governance-log/metrics/<date>.json -- a committed KPI snapshot.
+
+    A snapshot is exactly what ``kpi --json`` prints on its date, kept as a record so the
+    next one has something to be compared with. Two rules keep the series readable for
+    years: the top level is closed, so a misspelt section is an error rather than a
+    silently missing line in ``trend``; and every key ``kpi`` gains later is *optional*
+    here, so a snapshot committed before it existed stays valid. A section may carry keys
+    this schema does not name for the same reason.
+    """
+    share = {"type": "number", "minimum": 0, "maximum": 1}
+    count = {"type": "integer", "minimum": 0}
+    ids = {"type": "array", "items": {"type": "string"}}
+
+    def section(fields: dict[str, Any]) -> dict[str, Any]:
+        return {"type": "object", "required": list(fields), "properties": fields}
+
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:ea-skills:schema:metrics",
+        "title": "EA Skills KPI snapshot",
+        "description": (
+            "The output of `kpi --json` on one date, committed under governance-log/metrics/ "
+            "and named by that date. Read by `trend`."
+        ),
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "asOf", "size", "evidence", "governance", "portfolio",
+            "capabilities", "quality", "documentation", "service",
+        ],
+        "properties": {
+            "asOf": {"type": "string", "pattern": DATE_PATTERN},
+            "size": section(
+                {"elements": count, "relationships": count, "views": count, "facts": count, "entities": count}
+            ),
+            "evidence": section({"evidencedShare": share, "assumed": count}),
+            "governance": section(
+                {
+                    "ownedShare": share,
+                    "staleShare": share,
+                    "openDispensations": count,
+                    "decisions": count,
+                    "assessments": count,
+                }
+            ),
+            "portfolio": section(
+                {"applications": count, "timeClassifiedShare": share, "obsolescenceExposure": ids}
+            ),
+            "capabilities": section(
+                {
+                    "total": count,
+                    "unsupported": ids,
+                    "applicationsPerCapability": {"type": ["number", "null"], "minimum": 0},
+                }
+            ),
+            "quality": section({"orphans": ids}),
+            "documentation": section({"concerns": count, "unheldConcerns": ids, "unframedConcerns": ids}),
+            "service": section(
+                {
+                    "offerings": count,
+                    "requests": count,
+                    "open": count,
+                    "fulfilled": count,
+                    "declined": count,
+                    "slaBreaches": ids,
+                    "avgFulfilmentDays": {"type": ["number", "null"]},
+                }
+            ),
+            # Present only where the repository keeps clarification questions (0.17.0).
+            "questions": section(
+                {
+                    "open": count,
+                    "answered": count,
+                    "withdrawn": count,
+                    "oldestOpenDays": {"type": ["integer", "null"]},
+                    "unaddressed": ids,
+                }
+            ),
+        },
+    }
+
+
 def _slug_def() -> dict[str, Any]:
     return {
         "type": "string",
@@ -590,7 +849,11 @@ def build_standard_schema() -> dict[str, Any]:
                         "dependency": {
                             "type": "string",
                             "minLength": 1,
-                            "description": "Package name; 'groupId:artifactId' for pom.xml.",
+                            "description": (
+                                "Package name; 'groupId:artifactId' for pom.xml; for 'sbom', a "
+                                "package URL without its version (pkg:npm/pg, "
+                                "pkg:maven/org.postgresql/postgresql)."
+                            ),
                         },
                         "note": {"type": "string"},
                     },
@@ -1047,6 +1310,8 @@ SCHEMAS: tuple[tuple[Path, Callable[[], dict[str, Any]]], ...] = (
     (REFERENCE_SCHEMA_PATH, build_reference_schema),
     (REFERENCE_MAPPINGS_SCHEMA_PATH, build_reference_mappings_schema),
     (CONFIG_SCHEMA_PATH, build_config_schema),
+    (QUESTION_SCHEMA_PATH, build_question_schema),
+    (METRICS_SCHEMA_PATH, build_metrics_schema),
 )
 
 
@@ -1106,3 +1371,11 @@ def load_reference_mappings_schema(path: Path | None = None) -> dict[str, Any]:
 
 def load_config_schema(path: Path | None = None) -> dict[str, Any]:
     return _load(path or CONFIG_SCHEMA_PATH, build_config_schema)
+
+
+def load_question_schema(path: Path | None = None) -> dict[str, Any]:
+    return _load(path or QUESTION_SCHEMA_PATH, build_question_schema)
+
+
+def load_metrics_schema(path: Path | None = None) -> dict[str, Any]:
+    return _load(path or METRICS_SCHEMA_PATH, build_metrics_schema)

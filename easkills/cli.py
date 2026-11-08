@@ -15,14 +15,20 @@ from pathlib import Path
 from . import (
     airegister,
     alignment,
+    analyst,
     aoef,
     check as check_mod,
     contextpack,
     decisions,
     docgen,
+    documents as documents_mod,
     dora,
+    dora_its,
+    diff as diff_mod,
     dsl,
+    export as export_mod,
     facts as facts_mod,
+    gdpr as gdpr_mod,
     genschema,
     govern,
     impact as impact_mod,
@@ -33,12 +39,16 @@ from . import (
     oracle,
     promote as promote_mod,
     propose as propose_mod,
+    query as query_mod,
     readiness as readiness_mod,
     reference as reference_mod,
     render as render_mod,
     reports,
     score as score_mod,
+    security as security_mod,
+    serve as serve_mod,
     tabular,
+    timeline,
     ui,
     validate as validate_mod,
 )
@@ -94,6 +104,17 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_lang(parser: argparse.ArgumentParser) -> None:
+    from . import i18n
+
+    parser.add_argument(
+        "--lang",
+        choices=i18n.LANGUAGES,
+        default=i18n.DEFAULT,
+        help="language of the generated document (terminal output stays English)",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="easkills", description="Deterministic tooling for the EA skills pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -119,6 +140,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_render = sub.add_parser("render", help="render views to deterministic SVG")
     _add_common(p_render)
     p_render.add_argument("--out", type=Path, help="output directory (default: <root>/docs/views)")
+    p_render.add_argument(
+        "--heatmap",
+        metavar="PROPERTY",
+        help="colour each view by this property instead of by layer, written beside it as "
+        "<view>.heatmap-<property>.svg",
+    )
+
+    p_export = sub.add_parser("export", help="write views as PlantUML (ArchiMate notation) or Mermaid text")
+    _add_common(p_export)
+    p_export.add_argument("--format", dest="format", choices=export_mod.FORMATS, required=True, help="diagram language")
+    p_export.add_argument("--view", help="one view id (default: every view)")
+    p_export.add_argument(
+        "--out", type=Path, help="output directory (default: print one --view, else <root>/build/diagrams)"
+    )
 
     p_docs = sub.add_parser(
         "docs", help="generate the architecture description (ISO 42010 shape) from the approved zone"
@@ -130,6 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="generate even if the validator reports errors (not recommended)",
     )
+    _add_lang(p_docs)
 
     p_import = sub.add_parser(
         "import", help="import an ArchiMate Open Exchange file into model/staging/ (brownfield adoption)"
@@ -163,6 +199,32 @@ def build_parser() -> argparse.ArgumentParser:
         "--overwrite", action="store_true", help="replace an existing converted document"
     )
     p_csv.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
+
+    p_doc = sub.add_parser(
+        "intake-doc",
+        help="convert a PDF, Word, PowerPoint or Excel file into a citable source document",
+    )
+    p_doc.add_argument("--root", type=Path, default=Path.cwd(), help="model repository root (default: cwd)")
+    p_doc.add_argument("--file", type=Path, required=True, help="the .pdf, .docx, .pptx or .xlsx to convert")
+    p_doc.add_argument("--out", type=Path, help="target markdown file (default: <sourcesDir>/<name>.md)")
+    p_doc.add_argument("--overwrite", action="store_true", help="replace an existing converted document")
+    p_doc.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
+
+    p_rtm = sub.add_parser(
+        "rtm", help="requirement traceability: what each obligation binds, what meets it, what evidences it"
+    )
+    _add_common(p_rtm)
+    p_rtm.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
+    p_rtm.add_argument("--out", type=Path, help="write the matrix as a table (.csv for a spreadsheet, else markdown)")
+
+    p_glossary = sub.add_parser(
+        "glossary", help="the entity table as a glossary, with the facts and model elements behind each term"
+    )
+    p_glossary.add_argument("--root", type=Path, default=Path.cwd(), help="model repository root (default: cwd)")
+    p_glossary.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
+    p_glossary.add_argument(
+        "--out", type=Path, help="write the glossary as a table (.csv for a spreadsheet, else markdown)"
+    )
 
     p_promote = sub.add_parser(
         "promote", help="move staging files into approved after the promotion gate passes"
@@ -201,6 +263,54 @@ def build_parser() -> argparse.ArgumentParser:
             p_report.add_argument("--as-of", dest="as_of", help="evaluate against this date (YYYY-MM-DD)")
         if name == "conformance":
             p_report.add_argument("--strict", action="store_true", help="exit 1 if any clause fails")
+        if name == "kpi":
+            p_report.add_argument(
+                "--snapshot",
+                action="store_true",
+                help="also commit-ready: write governance-log/metrics/<as-of>.json (requires --as-of)",
+            )
+
+    p_trend = sub.add_parser("trend", help="the KPI series from committed snapshots, and what regressed")
+    p_trend.add_argument("--root", type=Path, default=Path.cwd(), help="model repository root (default: cwd)")
+    p_trend.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
+    p_trend.add_argument("--last", type=int, metavar="N", help="show only the last N snapshots (the JSON keeps all)")
+    p_trend.add_argument(
+        "--strict", action="store_true", help="exit 1 if any metric regressed since the previous snapshot"
+    )
+
+    p_diff = sub.add_parser("diff", help="what changes between two plateaus, or since a git commit")
+    p_diff.add_argument("--root", type=Path, default=Path.cwd(), help="model repository root (default: cwd)")
+    mode = p_diff.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--plateau", nargs=2, metavar=("FROM", "TO"), help="two plateau ids")
+    mode.add_argument("--ref", metavar="GIT-REF", help="a commit, tag or branch to compare the approved zone with")
+    p_diff.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
+
+    p_query = sub.add_parser("query", help="find elements by type, property and relationship hops (read-only)")
+    _add_common(p_query)
+    p_query.add_argument("--type", dest="types", action="append", metavar="TYPE", help="element type (repeatable)")
+    p_query.add_argument(
+        "--where",
+        action="append",
+        metavar="COND",
+        help="key=value, key!=value, key~token (membership), key= (absent); repeatable, all must hold",
+    )
+    p_query.add_argument("--from", dest="start", metavar="ID", help="walk from this element")
+    p_query.add_argument("--hops", type=int, default=1, help="steps from --from (default 1)")
+    p_query.add_argument(
+        "--rel", dest="relations", action="append", metavar="TYPE",
+        help="relationship type to walk, or appliesTo (repeatable; default all)",
+    )
+    p_query.add_argument("--direction", choices=query_mod.DIRECTIONS, default="both", help="which way to walk")
+    p_query.add_argument("--show", action="append", metavar="KEY", help="add a property column (repeatable)")
+    p_query.add_argument("--json", dest="json_out", type=Path, help="also write the result as JSON")
+
+    p_serve = sub.add_parser("serve", help="serve the approved model as a read-only MCP server over stdio")
+    p_serve.add_argument(
+        "--root",
+        type=Path,
+        help="where to look for the repository (default: $CLAUDE_PROJECT_DIR, else cwd; the nearest "
+        "directory upwards holding ea.config.yaml is used)",
+    )
 
     p_context = sub.add_parser(
         "context", help="generate an agent context pack for one element or capability (AD-09)"
@@ -238,6 +348,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_check.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
     p_check.add_argument("--strict", action="store_true", help="treat warnings as failures too")
     p_check.add_argument("--as-of", dest="as_of", help="evaluate dispensation expiry against this date")
+    p_check.add_argument(
+        "--sbom",
+        dest="sboms",
+        type=Path,
+        action="append",
+        help="a CycloneDX or SPDX JSON document to read as well (repeatable)",
+    )
+
+    p_exposure = sub.add_parser(
+        "exposure", help="what an attacker holding each publicly exposed element could reach"
+    )
+    _add_common(p_exposure)
+    p_exposure.add_argument("--depth", type=int, help="stop after N hops (default: unbounded)")
+    p_exposure.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
 
     p_score = sub.add_parser("score", help="score a candidate repository against a golden one (P/R/F1)")
     p_score.add_argument("--root", type=Path, default=Path.cwd(), help="candidate repository root (default: cwd)")
@@ -309,6 +433,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_dora.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
     p_dora.add_argument("--as-of", dest="as_of", metavar="YYYY-MM-DD", help="evaluate waiver expiry against this date")
     p_dora.add_argument("--strict", action="store_true", help="treat warnings as failures too")
+    p_dora.add_argument(
+        "--format",
+        dest="format",
+        choices=("markdown", "its-csv"),
+        default="markdown",
+        help="markdown document (default), or one CSV per ITS template into the --out directory",
+    )
+    _add_lang(p_dora)
 
     p_ai_act = sub.add_parser(
         "ai-act-register", help="generate the EU AI Act system inventory from the approved model"
@@ -322,6 +454,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--as-of", dest="as_of", metavar="YYYY-MM-DD", help="evaluate waiver expiry against this date"
     )
     p_ai_act.add_argument("--strict", action="store_true", help="treat warnings as failures too")
+    _add_lang(p_ai_act)
+
+    p_gdpr = sub.add_parser(
+        "gdpr-register", help="generate the GDPR Art. 30 record of processing activities from the approved model"
+    )
+    p_gdpr.add_argument("--root", type=Path, default=Path.cwd(), help="model repository root (default: cwd)")
+    p_gdpr.add_argument("--out", type=Path, help="write the record here (default: print the findings)")
+    p_gdpr.add_argument("--json", dest="json_out", type=Path, help="also write the report as JSON")
+    p_gdpr.add_argument("--as-of", dest="as_of", metavar="YYYY-MM-DD", help="evaluate waiver expiry against this date")
+    p_gdpr.add_argument("--strict", action="store_true", help="treat warnings as failures too")
+    _add_lang(p_gdpr)
 
     p_maturity = sub.add_parser(
         "maturity", help="level 1-5 per dimension from measured signals, with the items blocking the next"
@@ -331,7 +474,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_maturity.add_argument("--as-of", dest="as_of", metavar="YYYY-MM-DD", help="evaluate against this date")
 
     p_propose = sub.add_parser(
-        "propose", help="turn findings into staged requirement / work-package skeletons"
+        "propose", help="turn findings into skeletons: staged requirements and work packages, or open questions"
     )
     p_propose.add_argument("--root", type=Path, default=Path.cwd(), help="model repository root (default: cwd)")
     p_propose.add_argument(
@@ -429,7 +572,7 @@ def cmd_render(args: argparse.Namespace) -> int:
     if not _oracle_intact():
         return 1
     try:
-        result = render_mod.render_all(root, zone=args.zone, out_dir=args.out)
+        result = render_mod.render_all(root, zone=args.zone, out_dir=args.out, heatmap=args.heatmap)
     except render_mod.RenderError as exc:
         print(_error(str(exc)))
         return 1
@@ -451,7 +594,7 @@ def cmd_docs(args: argparse.Namespace) -> int:
             print("\nRefusing to document a model with validation errors (use --skip-validation to override).")
             return 1
     try:
-        result = docgen.generate(root, out=args.out)
+        result = docgen.generate(root, out=args.out, lang=args.lang)
     except render_mod.RenderError as exc:
         print(_error(str(exc)))
         return 1
@@ -563,6 +706,52 @@ def cmd_intake_csv(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_intake_doc(args: argparse.Namespace) -> int:
+    root = args.root.resolve()
+    config = dsl.load_config(root)
+    sources_dir = root / str(config.get("sourcesDir", "facts/sources"))
+    target = args.out or (sources_dir / f"{args.file.stem}.md")
+    try:
+        report = documents_mod.convert(args.file, target, overwrite=args.overwrite)
+    except documents_mod.DocumentError as exc:
+        print(_error(str(exc)))
+        return 1
+    lines = [
+        _ok(f"Converted a {report.kind} ({report.sections} section(s), {report.lines} line(s)) -> {ui.bold(report.target)}"),
+        ui.dim(f"source: {report.source} (sha256 {report.sha256[:16]}); read with {report.library}"),
+    ]
+    for note in report.notes:
+        lines.append(ui.yellow(f"note: {note}"))
+    lines += [
+        "",
+        ui.dim(
+            "Commit the original next to the converted document: the SHA-256 in the header is "
+            "what ties a verified quote back to the bytes it came from. Extract facts from it "
+            "with ea-intake; nothing here interpreted a single heading, table or slide."
+        ),
+    ]
+    _emit_report(args, report.as_dict(), "\n".join(lines))
+    return 0
+
+
+def cmd_rtm(args: argparse.Namespace) -> int:
+    matrix = analyst.rtm(args.root.resolve(), zone=args.zone)
+    _emit_report(args, matrix.as_dict(), analyst.render_rtm(matrix))
+    if args.out:
+        analyst.write_table(args.out, "Requirement traceability", analyst.rtm_table(matrix))
+        print(_ok(f"Matrix written to {args.out}"))
+    return 0
+
+
+def cmd_glossary(args: argparse.Namespace) -> int:
+    data = analyst.glossary(args.root.resolve())
+    _emit_report(args, data.as_dict(), analyst.render_glossary(data))
+    if args.out:
+        analyst.write_table(args.out, "Glossary", analyst.glossary_table(data))
+        print(_ok(f"Glossary written to {args.out}"))
+    return 0
+
+
 def cmd_promote(args: argparse.Namespace) -> int:
     try:
         result = promote_mod.promote(args.root.resolve(), files=args.files, dry_run=args.dry_run)
@@ -600,9 +789,92 @@ def cmd_staleness(args: argparse.Namespace) -> int:
 
 
 def cmd_kpi(args: argparse.Namespace) -> int:
-    data = reports.kpi(args.root.resolve(), today=_parse_as_of(args.as_of))
+    if args.snapshot and not args.as_of:
+        # The file name is the date. A wall-clock date there would make two runs of an
+        # unchanged repository disagree, which a committed record must never do.
+        print(_error("--snapshot needs --as-of: the snapshot is named by its date"))
+        return 1
+    root = args.root.resolve()
+    data = reports.kpi(root, today=_parse_as_of(args.as_of))
     _emit_report(args, data, reports.render_kpi(data))
+    if args.snapshot:
+        try:
+            path, written = timeline.write_snapshot(root, data)
+        except timeline.TimelineError as exc:
+            print(_error(str(exc)))
+            return 1
+        print(_ok(f"Snapshot {'written to' if written else 'unchanged at'} {path}"))
     return 0
+
+
+def cmd_trend(args: argparse.Namespace) -> int:
+    data = timeline.trend(args.root.resolve(), last=args.last)
+    _emit_report(args, data, timeline.render_trend(data))
+    if data["errors"]:
+        return 1
+    return 1 if args.strict and data["regressions"] else 0
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    root = args.root.resolve()
+    try:
+        if args.plateau:
+            data = diff_mod.plateaus(root, *args.plateau)
+            rendered = diff_mod.render_plateaus(data)
+        else:
+            data = diff_mod.since(root, args.ref)
+            rendered = diff_mod.render_since(data)
+    except diff_mod.DiffError as exc:
+        print(_error(str(exc)))
+        return 1
+    _emit_report(args, data, rendered)
+    return 0
+
+
+def cmd_query(args: argparse.Namespace) -> int:
+    try:
+        data = query_mod.run(
+            args.root.resolve(),
+            zone=args.zone,
+            types=args.types,
+            where=args.where,
+            start=args.start,
+            hops=args.hops,
+            relations=args.relations,
+            direction=args.direction,
+            show=args.show,
+        )
+    except query_mod.QueryError as exc:
+        print(_error(str(exc)))
+        return 1
+    _emit_report(args, data, query_mod.render(data))
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    root = args.root.resolve()
+    try:
+        diagrams = export_mod.export(root, args.format, zone=args.zone, view_id=args.view)
+    except export_mod.ExportError as exc:
+        print(_error(str(exc)))
+        return 1
+    if args.view and not args.out:
+        print(diagrams.get(args.view, ""), end="")
+        return 0
+    out_dir = args.out or (root / "build" / "diagrams")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for view_id, text in diagrams.items():
+        path = out_dir / f"{view_id}{export_mod.SUFFIX[args.format]}"
+        path.write_text(text, encoding="utf-8", newline="\n")
+        print(_ok(f"Exported {ui.bold(view_id)} {ui.arrow()} {path}"))
+    if not diagrams:
+        print("No views to export.")
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    root = (args.root or serve_mod.default_root()).resolve()
+    return serve_mod.serve(root)
 
 
 def cmd_debt(args: argparse.Namespace) -> int:
@@ -668,7 +940,11 @@ def cmd_impact(args: argparse.Namespace) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     report = check_mod.check(
-        args.root.resolve(), args.repo.resolve(), scope=args.scope, today=_parse_as_of(args.as_of)
+        args.root.resolve(),
+        args.repo.resolve(),
+        scope=args.scope,
+        today=_parse_as_of(args.as_of),
+        sboms=[path.resolve() for path in args.sboms or []],
     )
     print(report.render())
     if args.json_out:
@@ -678,6 +954,13 @@ def cmd_check(args: argparse.Namespace) -> int:
     if not report.ok:
         return 1
     return 1 if args.strict and report.warnings else 0
+
+
+def cmd_exposure(args: argparse.Namespace) -> int:
+    report = security_mod.exposure(args.root.resolve(), zone=args.zone, depth=args.depth)
+    _emit_report(args, report.as_dict(), security_mod.render_exposure(report))
+    # Always 0: a path an attacker could take is a decision to make, not a defect to gate on.
+    return 0
 
 
 def cmd_score(args: argparse.Namespace) -> int:
@@ -761,17 +1044,24 @@ def cmd_dora_register(args: argparse.Namespace) -> int:
             json.dumps(register.as_dict(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
         )
         print(f"\nJSON report written to {args.json_out}")
+    if args.format == "its-csv" and not args.out:
+        print(_error("--format its-csv writes one CSV per template; pass --out <directory>"))
+        return 1
     if args.out:
         # Refusing to write an empty document is the point: a page that looks like a
         # filing and says nothing is the worst artifact this command could produce.
         try:
-            document = dora.markdown(register)
+            if args.format == "its-csv":
+                written = dora_its.export(register, args.out, dora_its.provider_leis(args.root.resolve()))
+                print(_ok(f"{len(written) - 1} ITS template worksheet(s) and README.md written to {args.out}"))
+            else:
+                document = dora.markdown(register, args.lang)
+                args.out.parent.mkdir(parents=True, exist_ok=True)
+                args.out.write_text(document, encoding="utf-8", newline="\n")
+                print(_ok(f"Register written to {args.out}"))
         except dora.DoraError as exc:
             print(_error(str(exc)))
             return 1
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(document, encoding="utf-8", newline="\n")
-        print(_ok(f"Register written to {args.out}"))
     if not register.ok:
         return 1
     return 1 if args.strict and register.warnings else 0
@@ -790,13 +1080,36 @@ def cmd_ai_act_register(args: argparse.Namespace) -> int:
         # Same refusal as dora-register: an empty page that looks like a compliance
         # record is the worst artifact this command could produce.
         try:
-            document = airegister.markdown(register)
+            document = airegister.markdown(register, args.lang)
         except airegister.AiActError as exc:
             print(_error(str(exc)))
             return 1
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(document, encoding="utf-8", newline="\n")
         print(_ok(f"Inventory written to {args.out}"))
+    if not register.ok:
+        return 1
+    return 1 if args.strict and register.warnings else 0
+
+
+def cmd_gdpr_register(args: argparse.Namespace) -> int:
+    register = gdpr_mod.build(args.root.resolve(), today=_parse_as_of(args.as_of))
+    print(gdpr_mod.render(register))
+    if args.json_out:
+        args.json_out.parent.mkdir(parents=True, exist_ok=True)
+        args.json_out.write_text(
+            json.dumps(register.as_dict(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+        )
+        print(f"\nJSON report written to {args.json_out}")
+    if args.out:
+        try:
+            document = gdpr_mod.markdown(register, args.lang)
+        except gdpr_mod.GdprError as exc:
+            print(_error(str(exc)))
+            return 1
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(document, encoding="utf-8", newline="\n")
+        print(_ok(f"Record written to {args.out}"))
     if not register.ok:
         return 1
     return 1 if args.strict and register.warnings else 0
@@ -949,10 +1262,18 @@ HANDLERS = {
     "docs": cmd_docs,
     "import": cmd_import,
     "intake-csv": cmd_intake_csv,
+    "intake-doc": cmd_intake_doc,
+    "rtm": cmd_rtm,
+    "glossary": cmd_glossary,
     "promote": cmd_promote,
     "validate-gov": cmd_validate_gov,
     "staleness": cmd_staleness,
     "kpi": cmd_kpi,
+    "trend": cmd_trend,
+    "diff": cmd_diff,
+    "query": cmd_query,
+    "export": cmd_export,
+    "serve": cmd_serve,
     "debt": cmd_debt,
     "conformance": cmd_conformance,
     "correspondences": cmd_correspondences,
@@ -961,6 +1282,7 @@ HANDLERS = {
     "context": cmd_context,
     "impact": cmd_impact,
     "check": cmd_check,
+    "exposure": cmd_exposure,
     "score": cmd_score,
     "validate-facts": cmd_validate_facts,
     "chunk": cmd_chunk,
@@ -969,6 +1291,7 @@ HANDLERS = {
     "align": cmd_align,
     "dora-register": cmd_dora_register,
     "ai-act-register": cmd_ai_act_register,
+    "gdpr-register": cmd_gdpr_register,
     "propose": cmd_propose,
     "maturity": cmd_maturity,
     "pin-reference": cmd_pin_reference,

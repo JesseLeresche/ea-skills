@@ -1,6 +1,10 @@
 ---
 name: ea-adr
 description: Record an architecture decision (MADR-shaped) in the governance log. Use when a decision has been made or needs framing, when asked to "write an ADR" or "document this decision", when superseding an earlier decision, or when the ISO 42010 conformance check reports no decisions with rationale.
+argument-hint: "[decision title]"
+allowed-tools:
+  - Bash(easkills *)
+  - Bash(python -m easkills *)
 ---
 
 # Architecture decision records
@@ -59,7 +63,7 @@ Do not hand-write the file or pick its number. `decisions new` allocates the nex
 `NNNN-slug` id, validates before it writes, and refuses rather than leaving a broken record:
 
 ```bash
-python -m easkills decisions new --root . --title "..." --status proposed \
+easkills decisions new --root . --title "..." --status proposed \
   --context "..." --decision "..." --rationale "..." --consequences "..." \
   --element service-order-api --element app-order-portal
 ```
@@ -96,5 +100,5 @@ anything else:
   ADR, then have the requirement reference it. A requirement filed alone leaves its
   reasoning nowhere.
 
-Validate with `python -m easkills validate-gov`, report the decision in one sentence
+Validate with `easkills validate-gov`, report the decision in one sentence
 plus who should confirm `status: accepted` if you filed it as `proposed`.

@@ -1,6 +1,9 @@
 ---
 name: ea-run
 description: Orchestrate the EA pipeline - route a request to the right ea-* skill and keep the stage order honest. Use when a request spans multiple stages ("model our architecture from these documents"), when unsure which ea-* skill applies, or when resuming work in an EA repository whose state you have not inspected yet.
+allowed-tools:
+  - Bash(easkills *)
+  - Bash(python -m easkills *)
 ---
 
 # Routing the pipeline
@@ -8,15 +11,21 @@ description: Orchestrate the EA pipeline - route a request to the right ea-* ski
 The stages depend on each other; the most common failure is starting downstream of
 missing input. Establish the repository's state first, then route.
 
+Every command in these skills is `easkills <command>`. With the ea-skills plugin
+enabled, `easkills` is on the Bash tool's PATH; from a clone of ea-skills,
+`python -m easkills` is the same command with the same arguments and exit codes. If
+neither resolves, the tooling is not installed -- say so; do not reason your way to a
+verdict the tooling exists to compute.
+
 ## State check (one minute, always)
 
 ```bash
-python -m easkills validate-facts --root .   # is there a verified fact register?
-python -m easkills validate --root . --zone approved
-python -m easkills validate --root . --zone staging
-python -m easkills validate-gov --root .     # governance records healthy?
-python -m easkills delta --root .            # unmodelled entities / unused facts
-python -m easkills align --root .            # is there a reference yardstick, and where does it stand?
+easkills validate-facts --root .   # is there a verified fact register?
+easkills validate --root . --zone approved
+easkills validate --root . --zone staging
+easkills validate-gov --root .     # governance records healthy?
+easkills delta --root .            # unmodelled entities / unused facts
+easkills align --root .            # is there a reference yardstick, and where does it stand?
 ```
 
 ## Routing table
@@ -33,7 +42,7 @@ Everything else routes by situation:
 | New raw documents; empty or stale fact register | `ea-intake` |
 | Facts exist, no capability map | `ea-capability-map` (the spine comes first) |
 | Facts + capability map; elements/relations to add | `ea-model` |
-| Staging has content; human asks to publish | `ea-approve` (never on your own initiative) |
+| Staging has content; human asks to publish | `ea-approve` -- the human invokes it; it never loads on your initiative |
 | Who is this for / concerns unclear / ISO findings | `ea-stakeholders` |
 | Views needed or stale | `ea-views`; then `ea-docs` for the description |
 | New info against an existing model | `ea-delta-ingest` |
@@ -41,9 +50,12 @@ Everything else routes by situation:
 | Standards, waivers, decisions, assessments | `ea-standards-base` / `ea-dispensation` / `ea-adr` / `ea-compliance` |
 | "Is this done / complete?" · gap analysis against a reference model or industry blueprint | `ea-align` (there is no answer without a yardstick) |
 | Regulation, control frameworks, ICT third-party risk, "the DORA register" | `ea-regulatory` — control gaps are `align` against a `kind: control` pack; the register is `dora-register`, and it generates rather than attests |
+| Security architecture, threat modelling, "what could an attacker reach", data classification, zero trust, SBOMs | `ea-security` -- `exposure` walks the reach from public elements, `propose --from threats` writes the assessments, control coverage is `align` against `nist-sp-800-53-r5` |
 | AI systems, "the AI Act", risk classification, the AI inventory, AI risk acceptance | `ea-ai-governance` — same mechanism one register over: gaps are `align` against `nist-ai-rmf-1.0`, the inventory is `ai-act-register`, and accepted AI risk is a dispensation with an expiry |
-| "Make a backlog out of these findings" · gaps into requirements or work packages | `propose --from align\|readiness\|overlap\|time` writes the skeletons; the words, owner and review date are the human half (`ea-align`, `ea-adr`) |
-| Downstream repo needs its constraints | `ea-context` |
+| "Make a backlog out of these findings" · gaps into requirements or work packages | `propose --from align\|readiness\|overlap\|time\|coverage\|threats` writes the skeletons; the words, owner and review date are the human half (`ea-align`, `ea-adr`) |
+| Downstream repo needs its constraints · an ad-hoc question about the model · another agent or MCP host needs the architecture | `ea-context` -- `context` packs, `query`, and `serve` (read-only MCP) |
+| "What does the target state change?" · "what changed since the last board?" · "are we getting better?" | `diff --plateau`, `diff --ref`, `trend` via `ea-board` / `ea-health` |
+| Diagrams for a wiki, a pull request or slides · colour a view by lifecycle or owner | `ea-views` -- `export --format mermaid\|plantuml`, `render --heatmap` |
 | Periodic health / board preparation | `ea-health` / `ea-board` |
 | "How mature is our architecture practice?" | `maturity` via `ea-health` — five dimensions, never one number; the blockers are the answer |
 | "Do two systems do the same thing?" · application rationalization | `ea-health` reads the `debt` overlap items; the verdict goes to `ea-change-triage` (undecided overlap classifies **up**) or `ea-board`, and deliberate redundancy ends in `ea-adr` |

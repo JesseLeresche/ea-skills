@@ -34,11 +34,34 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
+      # The document converters are an optional extras group; installed here so their
+      # tests run. A separate test proves the core imports none of them at module level.
+      - name: Install the optional intake converters
+        run: python -m pip install -r requirements-intake.txt
+
       - name: Oracle integrity
         run: python -m easkills oracle-info
 
       - name: Tests
         run: python -m pytest tests -q
+
+  # The plugin surface, checked by the host's own validator. Pinned to the version the
+  # manifests were validated with, so a new release's stricter warnings arrive as a
+  # deliberate upgrade rather than as a red build nobody changed anything for. Skill
+  # frontmatter is *not* covered here -- the validator ignores unknown keys, which is why
+  # tests/test_plugin.py closes that vocabulary itself.
+  plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Claude Code (validator only, no credentials)
+        run: npm install -g @anthropic-ai/claude-code@2.1.268
+
+      - name: Plugin and marketplace manifests validate strictly
+        run: |
+          claude plugin validate --strict .
+          claude plugin validate --strict .claude-plugin/plugin.json
 
   # The artifact gates run once: they check repository content, not the interpreter.
   gate:
@@ -92,6 +115,24 @@ jobs:
       # Same bar for the second register: strict passes while carrying the AIR003 the
       # fixture holds on purpose -- an open waiver on a transparency-risk system is
       # accepted AI risk to disclose, not a defect to fix.
+      # The register fixtures pass the model gate too. aico was never validated until
+      # 0.19.0 and carried a REL001 nobody saw; finco is clean under --strict, aico without
+      # it, because two of its elements are isolated on purpose to exercise the gap section.
+      - name: Register fixtures pass the model gate
+        run: |
+          python -m easkills validate --root eval/fixtures/finco --strict
+          python -m easkills validate --root eval/fixtures/aico
+
+      - name: GDPR record of the regulated fixture (strict)
+        run: python -m easkills gdpr-register --root eval/fixtures/finco --as-of 2026-07-30 --strict
+
+      # The security vocabulary on its own fixture, clean the honest way: every public
+      # element and boundary crossing governed, every high rating anchored by a control.
+      - name: Security fixture validates and aligns (strict)
+        run: |
+          python -m easkills validate --root eval/fixtures/secco --strict
+          python -m easkills align    --root eval/fixtures/secco --strict
+
       - name: AI Act inventory of the AI fixture (strict)
         run: python -m easkills ai-act-register --root eval/fixtures/aico --as-of 2026-07-30 --strict
 
@@ -110,6 +151,7 @@ jobs:
       - name: Generated documentation must be fresh
         run: |
           python -m easkills docs --root eval/example
+          python -m easkills docs --root eval/example --lang pl
           git diff --exit-code eval/example/docs
 
       # The checklist is only worth having if it is gated. Pinned to a date because
@@ -181,6 +223,10 @@ jobs:
           fi
           if python -m easkills ai-act-register --root eval/fixtures/aico-broken --as-of 2026-07-30; then
             echo "::error::the broken AI Act fixture inventoried cleanly -- the AIR rules are not catching violations"
+            exit 1
+          fi
+          if python -m easkills gdpr-register --root eval/fixtures/finco-broken --as-of 2026-07-30; then
+            echo "::error::the broken GDPR fixture recorded cleanly -- the GDR rules are not catching violations"
             exit 1
           fi
 
